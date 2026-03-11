@@ -1,0 +1,187 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Podcast Anything Local</title>
+    <link rel="stylesheet" href="/ui-assets/styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="hero panel">
+        <div class="hero-copy">
+          <h1>Podcast Anything</h1>
+          <!-- <p class="eyebrow">Podcast Anything</p> -->
+          <!-- <h1>Turn a source into a playable draft without leaving your machine.</h1> -->
+          <!-- <p class="hero-text">
+            Submit a webpage, YouTube URL, or document. The backend rewrites a
+            script, synthesizes audio, and keeps the original artifacts under
+            <code>data/jobs/&lt;job_id&gt;/</code>.
+          </p> -->
+        </div>
+        <div class="hero-status">
+          <div class="status-card">
+            <span class="status-label">Defaults</span>
+            <strong id="provider-summary">Loading…</strong>
+          </div>
+        </div>
+      </header>
+
+      <main class="main-grid">
+        <section class="panel form-panel">
+          <div class="section-heading">
+            <p class="eyebrow">New Job</p>
+            <h2>Submit a source</h2>
+          </div>
+
+          <form id="job-form" class="job-form">
+            <div class="mode-switch" role="tablist" aria-label="Source type">
+              <button type="button" class="mode-button is-active" data-source-mode="url">URL</button>
+              <button type="button" class="mode-button" data-source-mode="file">Upload</button>
+            </div>
+
+            <div id="url-fields" class="input-group">
+              <label for="source-url">Source URL</label>
+              <input
+                id="source-url"
+                name="source_url"
+                type="url"
+                placeholder="https://example.com/article"
+              />
+              <p class="hint">Use this for webpages or YouTube links.</p>
+            </div>
+
+            <div id="file-fields" class="input-group is-hidden">
+              <label for="source-file">Upload a document</label>
+              <input id="source-file" name="source_file" type="file" accept=".txt,.pdf,.docx" />
+              <p class="hint">Accepted: .txt, .pdf, .docx</p>
+            </div>
+
+            <div class="input-group">
+              <label for="script-mode">Podcast mode</label>
+              <select id="script-mode" name="script_mode">
+                <option value="single">Single host</option>
+                <option value="duo">Two hosts</option>
+              </select>
+            </div>
+
+            <div class="field-grid">
+              <div class="input-group">
+                <label for="rewrite-provider">Rewrite provider override</label>
+                <select id="rewrite-provider" name="rewrite_provider">
+                  <option value="">Use app default</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="tts-provider">TTS provider override</label>
+                <select id="tts-provider" name="tts_provider">
+                  <option value="">Use app default</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-actions">
+              <button id="submit-button" class="primary-button" type="submit">Start job</button>
+              <p id="form-message" class="form-message" aria-live="polite"></p>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel job-panel">
+          <div class="section-heading">
+            <p class="eyebrow">Current Job</p>
+            <h2>Track progress and inspect results</h2>
+          </div>
+
+          <div id="job-empty" class="empty-state">
+            Submit a job or pick one from the recent list to inspect its script
+            and audio.
+          </div>
+
+          <div id="job-details" class="job-details is-hidden">
+            <div class="job-header">
+              <div>
+                <p class="job-id-label">Job ID</p>
+                <h3 id="job-id">-</h3>
+              </div>
+              <span id="job-status-badge" class="status-badge">Queued</span>
+            </div>
+
+            <dl class="job-meta">
+              <div class="job-title-panel">
+                <dt>Title</dt>
+                <dd id="job-title-value">-</dd>
+              </div>
+              <div>
+                <dt>Stage</dt>
+                <dd class="stage-display">
+                  <span id="job-stage-spinner" class="stage-spinner is-hidden" aria-hidden="true"></span>
+                  <span id="job-stage">-</span>
+                </dd>
+              </div>
+              <div>
+                <dt>Source</dt>
+                <dd id="job-source-kind">-</dd>
+              </div>
+              <div>
+                <dt>Podcast mode</dt>
+                <dd id="job-script-mode">-</dd>
+              </div>
+              <div>
+                <dt>Providers</dt>
+                <dd id="job-providers">-</dd>
+              </div>
+            </dl>
+
+            <p id="job-error" class="error-box is-hidden"></p>
+
+            <div class="job-actions">
+              <button id="retry-button" class="secondary-button" type="button">Retry job</button>
+              <button id="refresh-job-button" class="ghost-button" type="button">Refresh now</button>
+            </div>
+
+            <div class="artifact-grid">
+              <section class="artifact-card">
+                <div class="artifact-header">
+                  <h3>Script preview</h3>
+                  <a id="script-download" class="inline-link is-hidden" href="#">Download</a>
+                </div>
+                <pre id="script-preview" class="artifact-preview">No script loaded yet.</pre>
+              </section>
+
+              <section class="artifact-card">
+                <div class="artifact-header">
+                  <h3>Audio preview</h3>
+                  <a id="audio-download" class="inline-link is-hidden" href="#">Download</a>
+                </div>
+                <audio id="audio-player" class="audio-player is-hidden" controls preload="none"></audio>
+                <p id="audio-empty" class="hint">No audio loaded yet.</p>
+              </section>
+            </div>
+
+            <section class="artifact-card">
+              <div class="artifact-header">
+                <h3>Artifacts</h3>
+              </div>
+              <ul id="artifact-list" class="artifact-list"></ul>
+            </section>
+          </div>
+        </section>
+      </main>
+
+      <section class="panel recent-panel">
+        <div class="section-heading">
+          <p class="eyebrow">Recent Activity</p>
+          <h2>Recent jobs</h2>
+        </div>
+        <div class="recent-toolbar">
+          <p class="hint">Click any job to load its current status and artifacts.</p>
+          <button id="refresh-jobs-button" class="ghost-button" type="button">Refresh list</button>
+        </div>
+        <div id="recent-jobs" class="recent-jobs"></div>
+      </section>
+    </div>
+
+    <script src="/ui-assets/app.js" defer></script>
+  </body>
+</html>

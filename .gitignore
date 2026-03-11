@@ -1,0 +1,8 @@
+.venv/
+data/
+.env
+__pycache__/
+.pytest_cache/
+*.pyc
+repo_inspect/
+LOCAL_FIRST_REBUILD_CONTEXT.md

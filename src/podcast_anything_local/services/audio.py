@@ -1,0 +1,257 @@
+"""Audio synthesis orchestration."""
+
+from __future__ import annotations
+
+import re
+
+from podcast_anything_local.core.config import Settings
+from podcast_anything_local.providers.tts.base import SynthesizedAudio, TTSProvider, TTSProviderError
+from podcast_anything_local.providers.tts.elevenlabs import ElevenLabsTTSProvider
+from podcast_anything_local.providers.tts.piper import PiperTTSProvider
+from podcast_anything_local.providers.tts.wave import WaveTTSProvider
+
+_DUO_LINE_RE = re.compile(r"^\s*(HOST_A|HOST_B)\s*:\s*(.*)$", re.IGNORECASE)
+_SINGLE_SPEAKER_LABEL_RE = re.compile(
+    r"^\s*(?:host|co-host|narrator|speaker(?:\s+\d+)?|host_a|host_b)\s*:\s*",
+    re.IGNORECASE,
+)
+_TIMESTAMP_RE = re.compile(r"\b\d{1,2}:\d{2}(?:\s*[–-]\s*\d{1,2}:\d{2})?\b")
+_STAGE_DIRECTION_ONLY_RE = re.compile(r"^\s*(?:\[[^\]]+\]|\([^)]*\)|\{[^}]+\})\s*$")
+_INLINE_BRACKETED_RE = re.compile(r"\[[^\]]+\]")
+_INLINE_STAGE_PARENS_RE = re.compile(
+    r"\((?:[^)]*\b(?:music|sound|sfx|pause|beat|laughs?|sighs?|applause|"
+    r"fade(?:s|d)?\s+(?:in|out)|intro|outro|stinger|transition)[^)]*)\)",
+    re.IGNORECASE,
+)
+_SHORT_SECTION_RE = re.compile(
+    r"^(?:intro|outro|opening|closing|segment|section|part|chapter|break|transition|hook)\b",
+    re.IGNORECASE,
+)
+_MUSIC_CUE_RE = re.compile(
+    r"\b(?:music|sound effect|sound effects|sfx|stinger|theme|applause|"
+    r"fade(?:s|d)?\s+(?:in|out)|transition sting)\b",
+    re.IGNORECASE,
+)
+_SENTENCE_PUNCTUATION_RE = re.compile(r"[.!?]")
+_HOST_PLACEHOLDER_RE = re.compile(r"\bHOST_[AB]\b", re.IGNORECASE)
+_SELF_HOST_INTRO_RE = re.compile(
+    r"\b((?:i(?:'m| am)|this is)\s+(?:your\s+)?host)\s+(HOST_[AB])\b",
+    re.IGNORECASE,
+)
+_COHOST_INTRO_RE = re.compile(
+    r"\b((?:joining me(?:\s+today)?\s+is|with me(?:\s+today)?\s+is))\s+(HOST_[AB])\b",
+    re.IGNORECASE,
+)
+
+
+class AudioService:
+    def __init__(self, settings: Settings) -> None:
+        self._settings = settings
+
+    def synthesize(
+        self,
+        *,
+        script_text: str,
+        script_mode: str,
+        provider_name: str | None,
+        voice_id: str | None,
+        voice_id_b: str | None,
+    ) -> SynthesizedAudio:
+        resolved_provider_name = provider_name or self._settings.tts_provider
+        provider = self._build_provider(resolved_provider_name)
+        host_a_voice = voice_id or self._settings.tts_default_voice
+        host_b_voice = voice_id_b or self._settings.tts_duo_voice or host_a_voice
+
+        if resolved_provider_name.strip().lower() == "wave":
+            host_a_voice = host_a_voice or "host_a"
+            host_b_voice = host_b_voice or "host_b"
+
+        if script_mode == "duo":
+            turns = _parse_duo_turns(script_text)
+            if not turns:
+                raise TTSProviderError(
+                    "script_mode=duo requires script lines prefixed with HOST_A: or HOST_B:."
+                )
+            segments = [
+                provider.synthesize(
+                    text=turn_text,
+                    voice_id=host_a_voice if speaker == "HOST_A" else host_b_voice,
+                    speaker="host_a" if speaker == "HOST_A" else "host_b",
+                )
+                for speaker, turn_text in turns
+                ]
+            return provider.join(segments)
+
+        spoken_text = _sanitize_single_host_script(script_text)
+        if not spoken_text:
+            raise TTSProviderError("No spoken text remained after cleaning the single-host script.")
+        return provider.synthesize(text=spoken_text, voice_id=host_a_voice, speaker="host_a")
+
+    def _build_provider(self, provider_name: str) -> TTSProvider:
+        normalized = provider_name.strip().lower()
+        if normalized == "wave":
+            return WaveTTSProvider()
+        if normalized == "piper":
+            return PiperTTSProvider(
+                model_path=self._settings.piper_model_path,
+                model_path_b=self._settings.piper_model_path_b,
+                config_path=self._settings.piper_config_path,
+                config_path_b=self._settings.piper_config_path_b,
+                speaker_id=self._settings.piper_speaker_id,
+                speaker_id_b=self._settings.piper_speaker_id_b,
+            )
+        if normalized == "elevenlabs":
+            return ElevenLabsTTSProvider(
+                api_key=self._settings.elevenlabs_api_key,
+                model_id=self._settings.elevenlabs_model_id,
+                output_format=self._settings.elevenlabs_output_format,
+            )
+        raise TTSProviderError(f"Unsupported TTS provider: {provider_name}")
+
+
+def _parse_duo_turns(script_text: str) -> list[tuple[str, str]]:
+    turns: list[tuple[str, str]] = []
+    active_speaker: str | None = None
+    active_lines: list[str] = []
+
+    def flush() -> None:
+        nonlocal active_lines
+        if active_speaker and active_lines:
+            merged = "\n".join(active_lines).strip()
+            if merged:
+                turns.append((active_speaker, merged))
+        active_lines = []
+
+    for raw_line in script_text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            if active_speaker and active_lines:
+                active_lines.append("")
+            continue
+
+        normalized = _normalize_script_line(raw_line)
+        match = _DUO_LINE_RE.match(normalized)
+        if match:
+            flush()
+            active_speaker = match.group(1).upper()
+            content = _clean_spoken_line(match.group(2), strip_single_host_label=False)
+            content = _clean_duo_placeholder_tokens(content, speaker=active_speaker)
+            active_lines = [content] if content else []
+            continue
+
+        if active_speaker:
+            cleaned = _clean_spoken_line(normalized, strip_single_host_label=False)
+            cleaned = _clean_duo_placeholder_tokens(cleaned, speaker=active_speaker)
+            if cleaned:
+                active_lines.append(cleaned)
+
+    flush()
+    return turns
+
+
+def _sanitize_single_host_script(script_text: str) -> str:
+    spoken_lines: list[str] = []
+
+    for raw_line in script_text.splitlines():
+        if not raw_line.strip():
+            if spoken_lines and spoken_lines[-1] != "":
+                spoken_lines.append("")
+            continue
+
+        cleaned = _clean_spoken_line(raw_line)
+        if cleaned:
+            spoken_lines.append(cleaned)
+
+    return _join_spoken_lines(spoken_lines)
+
+
+def _normalize_script_line(line: str) -> str:
+    cleaned = line.strip()
+    cleaned = re.sub(r"^\s*#+\s*", "", cleaned)
+    cleaned = re.sub(r"^\s*>\s*", "", cleaned)
+    cleaned = cleaned.replace("**", "").replace("*", "")
+    cleaned = cleaned.replace("__", "").replace("`", "")
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
+def _clean_spoken_line(line: str, *, strip_single_host_label: bool = True) -> str | None:
+    cleaned = _normalize_script_line(line)
+    if not cleaned:
+        return None
+
+    if strip_single_host_label:
+        cleaned = _SINGLE_SPEAKER_LABEL_RE.sub("", cleaned).strip()
+        if not cleaned:
+            return None
+
+    if _STAGE_DIRECTION_ONLY_RE.match(cleaned):
+        return None
+
+    cleaned = _INLINE_BRACKETED_RE.sub(" ", cleaned)
+    cleaned = _INLINE_STAGE_PARENS_RE.sub(" ", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -\t")
+    if not cleaned:
+        return None
+
+    compact = cleaned.rstrip(":").strip()
+    if not compact:
+        return None
+
+    if _TIMESTAMP_RE.search(compact) and len(compact) <= 80:
+        return None
+    if (
+        _SHORT_SECTION_RE.match(compact)
+        and len(compact.split()) <= 8
+        and not _SENTENCE_PUNCTUATION_RE.search(compact)
+    ):
+        return None
+    if _MUSIC_CUE_RE.search(compact) and len(compact) <= 80:
+        return None
+    if cleaned.endswith(":") and len(cleaned) <= 40:
+        return None
+
+    return cleaned
+
+
+def _join_spoken_lines(lines: list[str]) -> str:
+    merged: list[str] = []
+    for line in lines:
+        if line == "":
+            if merged and merged[-1] != "":
+                merged.append("")
+            continue
+        merged.append(line)
+
+    while merged and merged[0] == "":
+        merged.pop(0)
+    while merged and merged[-1] == "":
+        merged.pop()
+    return "\n".join(merged).strip()
+
+
+def _clean_duo_placeholder_tokens(text: str | None, *, speaker: str) -> str | None:
+    if not text:
+        return text
+
+    other_speaker = "HOST_B" if speaker == "HOST_A" else "HOST_A"
+    cleaned = _SELF_HOST_INTRO_RE.sub(
+        lambda match: match.group(1) if match.group(2).upper() == speaker else match.group(0),
+        text,
+    )
+    cleaned = _COHOST_INTRO_RE.sub(
+        lambda match: f"{match.group(1)} my co-host"
+        if match.group(2).upper() == other_speaker
+        else match.group(0),
+        cleaned,
+    )
+    cleaned = re.sub(rf"\b{other_speaker}\b", "my co-host", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(rf"\b{speaker}\b", "", cleaned, flags=re.IGNORECASE)
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    cleaned = re.sub(r"\(\s*\)", "", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -\t")
+    if not cleaned or not _HOST_PLACEHOLDER_RE.search(cleaned):
+        return cleaned or None
+    cleaned = _HOST_PLACEHOLDER_RE.sub("", cleaned)
+    cleaned = re.sub(r"\s+([,.;:!?])", r"\1", cleaned)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -\t")
+    return cleaned or None

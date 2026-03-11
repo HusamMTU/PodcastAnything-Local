@@ -1,0 +1,269 @@
+"""FastAPI routes for job operations."""
+
+from __future__ import annotations
+
+import mimetypes
+from typing import Any
+
+from fastapi import APIRouter, HTTPException, Request, UploadFile, status
+from fastapi.responses import FileResponse
+from fastapi.responses import StreamingResponse
+
+from podcast_anything_local.db.models import CreateJobInput
+from podcast_anything_local.db.repository import JobNotFoundError, generate_job_id
+from podcast_anything_local.schemas.config import AppConfigResponse
+from podcast_anything_local.schemas.jobs import ArtifactResponse, CreateJobRequest, JobResponse
+from podcast_anything_local.storage.artifacts import ArtifactNotFoundError
+
+router = APIRouter()
+
+
+@router.get("/health")
+def healthcheck() -> dict[str, str]:
+    return {"status": "ok"}
+
+
+@router.get("/config", response_model=AppConfigResponse)
+def app_config(request: Request) -> AppConfigResponse:
+    settings = request.app.state.settings
+    return AppConfigResponse(
+        app_name=settings.app_name,
+        default_web_extractor=settings.web_extractor,
+        default_rewrite_provider=settings.rewrite_provider,
+        default_tts_provider=settings.tts_provider,
+        default_style=settings.rewrite_style,
+        supported_web_extractors=["auto", "trafilatura", "bs4"],
+        supported_rewrite_providers=["ollama", "openai"],
+        supported_tts_providers=["piper", "elevenlabs"],
+    )
+
+
+@router.post("/jobs", response_model=JobResponse, status_code=status.HTTP_202_ACCEPTED)
+async def create_job(request: Request) -> JobResponse:
+    repository = request.app.state.repository
+    artifact_store = request.app.state.artifact_store
+    executor = request.app.state.executor
+    settings = request.app.state.settings
+
+    try:
+        payload = await _parse_create_request(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    job_id = generate_job_id()
+    source_file_path: str | None = None
+    metadata: dict[str, Any] = {}
+
+    if payload["source_file"] is not None:
+        upload = payload["source_file"]
+        file_bytes = await upload.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+        source_file_path = artifact_store.save_uploaded_file(job_id, upload.filename or "upload.bin", file_bytes)
+        metadata["uploaded_content_type"] = upload.content_type
+
+    record = repository.create_job(
+        CreateJobInput(
+            job_id=job_id,
+            source_kind=payload["source_kind"],
+            source_url=payload["source_url"],
+            source_file_name=payload["source_file_name"],
+            source_file_path=source_file_path,
+            title=payload["title"],
+            style=payload["style"] or settings.rewrite_style,
+            script_mode=payload["script_mode"],
+            rewrite_provider=payload["rewrite_provider"] or settings.rewrite_provider,
+            tts_provider=payload["tts_provider"] or settings.tts_provider,
+            voice_id=payload["voice_id"],
+            voice_id_b=payload["voice_id_b"],
+            metadata=metadata,
+        )
+    )
+    executor.submit(record.job_id)
+    return JobResponse.from_record(record)
+
+
+@router.get("/jobs", response_model=list[JobResponse])
+def list_jobs(request: Request) -> list[JobResponse]:
+    repository = request.app.state.repository
+    return [JobResponse.from_record(job) for job in repository.list_jobs()]
+
+
+@router.get("/jobs/{job_id}", response_model=JobResponse)
+def get_job(job_id: str, request: Request) -> JobResponse:
+    repository = request.app.state.repository
+    try:
+        job = repository.get_job(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return JobResponse.from_record(job)
+
+
+@router.get("/jobs/{job_id}/rewrite-stream")
+def stream_job_rewrite(job_id: str, request: Request) -> StreamingResponse:
+    repository = request.app.state.repository
+    job_event_broker = request.app.state.job_event_broker
+    try:
+        repository.get_job(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    return StreamingResponse(
+        job_event_broker.stream(job_id),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+@router.get("/jobs/{job_id}/rewrite-preview")
+def get_job_rewrite_preview(job_id: str, request: Request) -> dict[str, str]:
+    repository = request.app.state.repository
+    job_event_broker = request.app.state.job_event_broker
+    try:
+        repository.get_job(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {"text": job_event_broker.get_rewrite_snapshot(job_id)}
+
+
+@router.get("/jobs/{job_id}/artifacts", response_model=list[ArtifactResponse])
+def get_job_artifacts(job_id: str, request: Request) -> list[ArtifactResponse]:
+    repository = request.app.state.repository
+    artifact_store = request.app.state.artifact_store
+    try:
+        repository.get_job(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return [
+        ArtifactResponse.from_info(item, job_id=job_id)
+        for item in artifact_store.list_artifacts(job_id)
+    ]
+
+
+@router.get("/jobs/{job_id}/artifacts/{artifact_name}")
+def download_job_artifact(job_id: str, artifact_name: str, request: Request) -> FileResponse:
+    repository = request.app.state.repository
+    artifact_store = request.app.state.artifact_store
+    try:
+        repository.get_job(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        artifact = artifact_store.get_artifact(job_id, artifact_name)
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    media_type, _ = mimetypes.guess_type(artifact.name)
+    return FileResponse(
+        path=artifact.absolute_path,
+        media_type=media_type or "application/octet-stream",
+        filename=artifact.name,
+    )
+
+
+@router.post("/jobs/{job_id}/retry", response_model=JobResponse)
+def retry_job(job_id: str, request: Request) -> JobResponse:
+    repository = request.app.state.repository
+    artifact_store = request.app.state.artifact_store
+    executor = request.app.state.executor
+    try:
+        existing = repository.get_job(job_id)
+        for artifact_path in {
+            existing.source_artifact,
+            existing.script_artifact,
+            existing.audio_artifact,
+            existing.metadata.get("metadata_artifact"),
+        }:
+            if not artifact_path or artifact_path == existing.source_file_path:
+                continue
+            artifact_store.delete_artifact(artifact_path)
+        record = repository.reset_for_retry(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ArtifactNotFoundError:
+        record = repository.reset_for_retry(job_id)
+    executor.submit(job_id)
+    return JobResponse.from_record(record)
+
+
+async def _parse_create_request(request: Request) -> dict[str, Any]:
+    content_type = request.headers.get("content-type", "")
+    if "application/json" in content_type:
+        payload = CreateJobRequest.model_validate(await request.json())
+        return _normalize_inputs(
+            source_url=payload.source_url,
+            source_file=None,
+            title=payload.title,
+            style=payload.style,
+            script_mode=payload.script_mode,
+            rewrite_provider=payload.rewrite_provider,
+            tts_provider=payload.tts_provider,
+            voice_id=payload.voice_id,
+            voice_id_b=payload.voice_id_b,
+        )
+
+    if "multipart/form-data" in content_type or "application/x-www-form-urlencoded" in content_type:
+        form = await request.form()
+        upload = form.get("source_file")
+        source_file = upload if _is_upload_file(upload) else None
+        return _normalize_inputs(
+            source_url=_optional_form_value(form.get("source_url")),
+            source_file=source_file,
+            title=_optional_form_value(form.get("title")),
+            style=_optional_form_value(form.get("style")) or "podcast",
+            script_mode=_optional_form_value(form.get("script_mode")) or "single",
+            rewrite_provider=_optional_form_value(form.get("rewrite_provider")),
+            tts_provider=_optional_form_value(form.get("tts_provider")),
+            voice_id=_optional_form_value(form.get("voice_id")),
+            voice_id_b=_optional_form_value(form.get("voice_id_b")),
+        )
+
+    raise ValueError("Unsupported content type. Use application/json or multipart/form-data.")
+
+
+def _normalize_inputs(
+    *,
+    source_url: str | None,
+    source_file: UploadFile | None,
+    title: str | None,
+    style: str,
+    script_mode: str,
+    rewrite_provider: str | None,
+    tts_provider: str | None,
+    voice_id: str | None,
+    voice_id_b: str | None,
+) -> dict[str, Any]:
+    if bool(source_url) == bool(source_file):
+        raise ValueError("Provide exactly one of source_url or source_file.")
+    if script_mode not in {"single", "duo"}:
+        raise ValueError("script_mode must be one of: single, duo")
+    return {
+        "source_kind": "url" if source_url else "file",
+        "source_url": source_url,
+        "source_file": source_file,
+        "source_file_name": source_file.filename if source_file else None,
+        "title": title,
+        "style": style.strip() if style else "podcast",
+        "script_mode": script_mode,
+        "rewrite_provider": rewrite_provider.strip().lower() if rewrite_provider else None,
+        "tts_provider": tts_provider.strip().lower() if tts_provider else None,
+        "voice_id": voice_id,
+        "voice_id_b": voice_id_b,
+    }
+
+
+def _optional_form_value(value: object) -> str | None:
+    if isinstance(value, str):
+        cleaned = value.strip()
+        return cleaned or None
+    return None
+
+
+def _is_upload_file(value: object) -> bool:
+    return isinstance(value, UploadFile) or (
+        hasattr(value, "filename") and hasattr(value, "read")
+    )
