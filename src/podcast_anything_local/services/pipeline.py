@@ -57,12 +57,47 @@ class PipelineService:
             if source_type == "pdf" and not source_text.strip() and not multimodal_pdf:
                 raise RuntimeError("This PDF does not contain extractable text for processing.")
             if multimodal_pdf:
+                prepared_document = self._document_service.prepare_document_for_analysis(
+                    source_text=source_text,
+                    source_type=source_type,
+                    source_file_path=job.source_file_path,
+                    source_file_name=job.source_file_name,
+                )
+                prepared_metadata = dict(prepared_document.metadata)
+                analysis_pdf_path = prepared_document.analysis_pdf_path or ""
+                if prepared_document.analysis_pdf_bytes is not None:
+                    stage = "normalizing"
+                    self._repository.update_stage(job_id, stage)
+                    if not prepared_document.analysis_artifact_name:
+                        raise RuntimeError("Normalized documents must provide an artifact name.")
+                    analysis_pdf_path = self._artifact_store.write_bytes(
+                        job_id,
+                        prepared_document.analysis_artifact_name,
+                        prepared_document.analysis_pdf_bytes,
+                    )
+                    prepared_metadata["normalized_document_artifact"] = analysis_pdf_path
+
+                for filename, content in prepared_document.text_artifacts.items():
+                    artifact_path = self._artifact_store.write_text(job_id, filename, content)
+                    if filename == "slide_notes.json":
+                        prepared_metadata["slide_notes_artifact"] = artifact_path
+                    if filename == "normalized_page_context.json":
+                        prepared_metadata["normalized_page_context_artifact"] = artifact_path
+
+                if prepared_metadata:
+                    self._repository.record_artifact(
+                        job_id,
+                        metadata_updates=prepared_metadata,
+                    )
+
                 stage = "analyzing"
                 self._repository.update_stage(job_id, stage)
                 analysis = self._document_service.analyze_pdf_document(
-                    source_file_path=job.source_file_path or "",
+                    source_file_path=analysis_pdf_path,
+                    source_display_name=prepared_document.analysis_display_name,
                     title=job.title,
                     script_mode=job.script_mode,
+                    page_context=prepared_document.page_context,
                 )
                 for filename, content in self._document_service.build_artifacts(
                     analysis=analysis,

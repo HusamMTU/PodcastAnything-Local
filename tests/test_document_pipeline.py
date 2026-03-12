@@ -1,8 +1,13 @@
 from __future__ import annotations
 
+import json
+from io import BytesIO
 from pathlib import Path
+from xml.sax.saxutils import escape
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from pypdf import PdfWriter
+from pptx import Presentation
 
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.services.document_pipeline import MultimodalDocumentService
@@ -10,7 +15,7 @@ from podcast_anything_local.services.document_pipeline import MultimodalDocument
 
 class _FakeDocumentProvider:
     def __init__(self) -> None:
-        self.chunk_calls: list[tuple[int, int, int]] = []
+        self.chunk_calls: list[tuple[int, int, int, str | None]] = []
         self.map_calls: int = 0
         self.plan_calls: int = 0
 
@@ -25,8 +30,9 @@ class _FakeDocumentProvider:
         page_start: int,
         page_end: int,
         script_mode: str,
+        supplemental_text: str | None = None,
     ) -> dict[str, object]:
-        self.chunk_calls.append((chunk_index, page_start, page_end))
+        self.chunk_calls.append((chunk_index, page_start, page_end, supplemental_text))
         return {
             "page_start": page_start,
             "page_end": page_end,
@@ -109,6 +115,39 @@ def _build_settings(tmp_path: Path) -> Settings:
     )
 
 
+def _build_docx_bytes(paragraphs: list[str]) -> bytes:
+    document_xml = "".join(
+        f"<w:p><w:r><w:t>{escape(paragraph)}</w:t></w:r></w:p>"
+        for paragraph in paragraphs
+    )
+    content_types = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>
+"""
+    relationships = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>
+"""
+    document = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    {document_xml}
+    <w:sectPr/>
+  </w:body>
+</w:document>
+"""
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("_rels/.rels", relationships)
+        archive.writestr("word/document.xml", document)
+    return buffer.getvalue()
+
+
 def test_multimodal_document_service_builds_chunks_and_plan(tmp_path: Path) -> None:
     pdf_path = tmp_path / "document.pdf"
     writer = PdfWriter()
@@ -130,11 +169,12 @@ def test_multimodal_document_service_builds_chunks_and_plan(tmp_path: Path) -> N
 
     analysis = service.analyze_pdf_document(
         source_file_path=str(pdf_path),
+        source_display_name="document.pdf",
         title="Quantum Notes",
         script_mode="single",
     )
     assert analysis.page_count == 7
-    assert fake_provider.chunk_calls == [(1, 1, 6), (2, 6, 7)]
+    assert fake_provider.chunk_calls == [(1, 1, 6, None), (2, 6, 7, None)]
     assert fake_provider.map_calls == 1
 
     podcast_plan = service.build_podcast_plan(
@@ -160,3 +200,85 @@ def test_multimodal_document_service_builds_chunks_and_plan(tmp_path: Path) -> N
     assert "chunk_001_summary.json" in artifacts
     assert "podcast_plan.json" in plan_artifacts
     assert "rewrite_input.txt" in plan_artifacts
+
+
+def test_prepare_document_for_analysis_normalizes_docx_to_pdf(tmp_path: Path) -> None:
+    docx_path = tmp_path / "brief.docx"
+    docx_path.write_bytes(
+        _build_docx_bytes(
+            [
+                "Quantum mechanics explains microscopic systems.",
+                "Its applications include semiconductors and lasers.",
+            ]
+        )
+    )
+
+    service = MultimodalDocumentService(_build_settings(tmp_path))
+    source_text = (
+        "Quantum mechanics explains microscopic systems.\n\n"
+        "Its applications include semiconductors and lasers."
+    )
+    prepared = service.prepare_document_for_analysis(
+        source_text=source_text,
+        source_type="docx",
+        source_file_path=str(docx_path),
+        source_file_name="brief.docx",
+    )
+
+    assert prepared.analysis_pdf_bytes is not None
+    assert prepared.analysis_artifact_name == "normalized.pdf"
+    assert prepared.metadata["normalized_document_used"] is True
+    assert prepared.metadata["normalized_document_source_type"] == "docx"
+    assert prepared.page_context
+    assert "normalized_page_context.json" in prepared.text_artifacts
+
+
+def test_prepare_document_for_analysis_normalizes_pptx_and_feeds_notes_into_chunk_prompt(
+    tmp_path: Path
+) -> None:
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+    slide.shapes.title.text = "Quantum basics"
+    slide.placeholders[1].text = "Wave functions\nUncertainty principle"
+    slide.notes_slide.notes_text_frame.text = "Introduce the topic with simple examples."
+    buffer = BytesIO()
+    presentation.save(buffer)
+    pptx_path = tmp_path / "deck.pptx"
+    pptx_path.write_bytes(buffer.getvalue())
+
+    source_text = (
+        "Slide 1: Quantum basics\n\n"
+        "Wave functions\n\n"
+        "Uncertainty principle\n\n"
+        "Speaker notes:\n"
+        "Introduce the topic with simple examples."
+    )
+    fake_provider = _FakeDocumentProvider()
+    service = MultimodalDocumentService(
+        _build_settings(tmp_path),
+        provider_factory=lambda: fake_provider,
+    )
+    prepared = service.prepare_document_for_analysis(
+        source_text=source_text,
+        source_type="pptx",
+        source_file_path=str(pptx_path),
+        source_file_name="deck.pptx",
+    )
+
+    normalized_pdf_path = tmp_path / "normalized.pdf"
+    normalized_pdf_path.write_bytes(prepared.analysis_pdf_bytes or b"")
+
+    analysis = service.analyze_pdf_document(
+        source_file_path=str(normalized_pdf_path),
+        source_display_name="deck.pdf",
+        title="Quantum basics",
+        script_mode="single",
+        page_context=prepared.page_context,
+    )
+
+    slide_notes = json.loads(prepared.text_artifacts["slide_notes.json"])
+    assert prepared.analysis_pdf_bytes is not None
+    assert prepared.metadata["normalized_document_has_slide_notes"] is True
+    assert slide_notes[0]["notes"] == "Introduce the topic with simple examples."
+    assert analysis.page_count >= 1
+    assert "Introduce the topic with simple examples." in (fake_provider.chunk_calls[0][3] or "")

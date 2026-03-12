@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import time
+from xml.sax.saxutils import escape
 from io import BytesIO
 from pathlib import Path
+from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi.testclient import TestClient
 from pypdf import PdfWriter
@@ -89,6 +91,85 @@ def _stub_openai_provider(
         "generate_title",
         lambda self, **kwargs: title,
     )
+    monkeypatch.setattr(
+        OpenAICompatibleRewriteProvider,
+        "summarize_pdf_chunk",
+        lambda self, **kwargs: {
+            "page_start": kwargs["page_start"],
+            "page_end": kwargs["page_end"],
+            "summary": "Chunk summary",
+            "key_points": ["Point"],
+            "visual_elements": ["Visual"],
+            "podcast_angles": ["Angle"],
+            "must_include_details": ["Detail"],
+            "caveats": [],
+        },
+    )
+    monkeypatch.setattr(
+        OpenAICompatibleRewriteProvider,
+        "build_document_map",
+        lambda self, **kwargs: {
+            "overall_summary": "Combined summary",
+            "narrative_arc": ["Start", "End"],
+            "must_include": ["Key fact"],
+            "supporting_details": ["Supporting detail"],
+            "visual_takeaways": ["Visual takeaway"],
+            "caveats": [],
+        },
+    )
+    monkeypatch.setattr(
+        OpenAICompatibleRewriteProvider,
+        "build_podcast_plan",
+        lambda self, **kwargs: {
+            "working_title": title,
+            "audience": "General audience",
+            "angle": "Explain the essentials",
+            "intro": "Start quickly.",
+            "outro": "End clearly.",
+            "must_include": ["Key fact"],
+            "segments": [
+                {
+                    "name": "Segment One",
+                    "purpose": "Explain the core concept",
+                    "beats": ["Beat one", "Beat two"],
+                    "source_pages": [1],
+                }
+            ],
+        },
+    )
+
+
+def _build_docx_bytes(paragraphs: list[str]) -> bytes:
+    document_xml = "".join(
+        f"<w:p><w:r><w:t>{escape(paragraph)}</w:t></w:r></w:p>"
+        for paragraph in paragraphs
+    )
+    content_types = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>
+"""
+    relationships = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>
+"""
+    document = f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:body>
+    {document_xml}
+    <w:sectPr/>
+  </w:body>
+</w:document>
+"""
+    buffer = BytesIO()
+    with ZipFile(buffer, "w", ZIP_DEFLATED) as archive:
+        archive.writestr("[Content_Types].xml", content_types)
+        archive.writestr("_rels/.rels", relationships)
+        archive.writestr("word/document.xml", document)
+    return buffer.getvalue()
 
 
 def _wait_for_terminal_job_state(client: TestClient, job_id: str) -> dict:
@@ -253,11 +334,79 @@ def test_create_job_from_uploaded_pptx_file(tmp_path: Path, monkeypatch) -> None
         terminal_payload = _wait_for_terminal_job_state(client, payload["job_id"])
         assert terminal_payload["status"] == "completed"
         assert terminal_payload["metadata"]["source_type"] == "pptx"
+        assert terminal_payload["metadata"]["normalized_document_used"] is True
+        assert terminal_payload["metadata"]["normalized_document_has_slide_notes"] is True
 
         artifacts_response = client.get(f"/jobs/{payload['job_id']}/artifacts")
         artifacts_payload = artifacts_response.json()
         artifacts = {item["name"] for item in artifacts_payload}
-        assert {"audio.wav", "input_deck.pptx", "metadata.json", "script.txt", "source.txt"} <= artifacts
+        assert {
+            "audio.wav",
+            "chunk_001_summary.json",
+            "document_map.json",
+            "input_deck.pptx",
+            "metadata.json",
+            "normalized.pdf",
+            "normalized_page_context.json",
+            "page_index.json",
+            "podcast_plan.json",
+            "rewrite_input.txt",
+            "script.txt",
+            "slide_notes.json",
+            "source.txt",
+        } <= artifacts
+
+
+def test_create_job_from_uploaded_docx_file_uses_normalized_pdf(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _stub_openai_provider(monkeypatch)
+    docx_bytes = _build_docx_bytes(
+        [
+            "Quantum mechanics explains microscopic systems.",
+            "Its applications include semiconductors and lasers.",
+        ]
+    )
+
+    app = create_app(_build_settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/jobs",
+            data={"script_mode": "single"},
+            files={
+                "source_file": (
+                    "brief.docx",
+                    docx_bytes,
+                    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                )
+            },
+        )
+
+        assert response.status_code == 202
+        payload = response.json()
+        terminal_payload = _wait_for_terminal_job_state(client, payload["job_id"])
+
+        assert terminal_payload["status"] == "completed"
+        assert terminal_payload["metadata"]["source_type"] == "docx"
+        assert terminal_payload["metadata"]["normalized_document_used"] is True
+
+        artifacts = {
+            item["name"] for item in client.get(f"/jobs/{payload['job_id']}/artifacts").json()
+        }
+        assert {
+            "audio.wav",
+            "chunk_001_summary.json",
+            "document_map.json",
+            "input_brief.docx",
+            "metadata.json",
+            "normalized.pdf",
+            "normalized_page_context.json",
+            "page_index.json",
+            "podcast_plan.json",
+            "rewrite_input.txt",
+            "script.txt",
+            "source.txt",
+        } <= artifacts
 
 
 def test_create_job_from_uploaded_pdf_uses_multimodal_document_pipeline(
