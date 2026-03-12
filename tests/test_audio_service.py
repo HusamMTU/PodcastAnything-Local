@@ -137,3 +137,25 @@ Host: Welcome back. [Music fades out] Today we're talking about quantum mechanic
             "host_a",
         )
     ]
+
+
+def test_audio_service_does_not_apply_single_host_default_voice_to_duo(tmp_path: Path, monkeypatch) -> None:
+    provider = _CapturingProvider()
+    service = AudioService(_build_settings(tmp_path))
+    monkeypatch.setattr(service, "_build_provider", lambda provider_name: provider)
+
+    service.synthesize(
+        script_text="""
+HOST_A: Welcome back.
+HOST_B: Glad to be here.
+""",
+        script_mode="duo",
+        provider_name="piper",
+        voice_id=None,
+        voice_id_b=None,
+    )
+
+    assert provider.calls == [
+        ("Welcome back.", None, "host_a"),
+        ("Glad to be here.", "host_b", "host_b"),
+    ]

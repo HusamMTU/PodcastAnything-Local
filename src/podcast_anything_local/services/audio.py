@@ -59,14 +59,14 @@ class AudioService:
     ) -> SynthesizedAudio:
         resolved_provider_name = provider_name or self._settings.tts_provider
         provider = self._build_provider(resolved_provider_name)
-        host_a_voice = voice_id or self._settings.tts_default_voice
-        host_b_voice = voice_id_b or self._settings.tts_duo_voice or host_a_voice
-
-        if resolved_provider_name.strip().lower() == "wave":
-            host_a_voice = host_a_voice or "host_a"
-            host_b_voice = host_b_voice or "host_b"
-
         if script_mode == "duo":
+            host_a_voice = voice_id
+            host_b_voice = voice_id_b or self._settings.tts_duo_voice
+
+            if resolved_provider_name.strip().lower() == "wave":
+                host_a_voice = host_a_voice or "host_a"
+                host_b_voice = host_b_voice or "host_b"
+
             turns = _parse_duo_turns(script_text)
             if not turns:
                 raise TTSProviderError(
@@ -81,6 +81,10 @@ class AudioService:
                 for speaker, turn_text in turns
                 ]
             return provider.join(segments)
+
+        host_a_voice = voice_id or self._settings.tts_default_voice
+        if resolved_provider_name.strip().lower() == "wave":
+            host_a_voice = host_a_voice or "host_a"
 
         spoken_text = _sanitize_single_host_script(script_text)
         if not spoken_text:

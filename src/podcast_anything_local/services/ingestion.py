@@ -24,6 +24,11 @@ try:
 except ModuleNotFoundError:  # pragma: no cover
     PdfReader = None
 
+try:
+    from pptx import Presentation
+except ModuleNotFoundError:  # pragma: no cover
+    Presentation = None
+
 
 class IngestionServiceError(RuntimeError):
     """Raised when source ingestion fails."""
@@ -32,6 +37,7 @@ class IngestionServiceError(RuntimeError):
 _SUPPORTED_EXTENSIONS = {
     ".pdf": "pdf",
     ".docx": "docx",
+    ".pptx": "pptx",
     ".txt": "txt",
 }
 
@@ -174,6 +180,8 @@ def _extract_document_text(file_bytes: bytes, filename: str) -> tuple[str, str]:
         text = _extract_pdf_text(file_bytes)
     elif document_type == "docx":
         text = _extract_docx_text(file_bytes)
+    elif document_type == "pptx":
+        text = _extract_pptx_text(file_bytes)
     else:
         text = _extract_txt_text(file_bytes)
     if not text:
@@ -208,6 +216,55 @@ def _extract_docx_text(file_bytes: bytes) -> str:
             raise IngestionServiceError(f"Failed to parse DOCX document: {exc}") from exc
     lines = [line.strip() for line in raw_text.splitlines() if line.strip()]
     return "\n\n".join(lines).strip()
+
+
+def _extract_pptx_text(file_bytes: bytes) -> str:
+    if Presentation is None:
+        raise IngestionServiceError("PPTX support requires the `python-pptx` package.")
+    try:
+        presentation = Presentation(BytesIO(file_bytes))
+    except Exception as exc:  # pragma: no cover
+        raise IngestionServiceError(f"Failed to parse PPTX document: {exc}") from exc
+
+    extracted: list[str] = []
+    for slide_number, slide in enumerate(presentation.slides, start=1):
+        title_shape = slide.shapes.title
+        title_text = _shape_text(title_shape)
+        slide_header = f"Slide {slide_number}"
+        if title_text:
+            slide_header = f"{slide_header}: {title_text}"
+
+        body_blocks: list[str] = []
+        for shape in slide.shapes:
+            if title_shape is not None and shape == title_shape:
+                continue
+            text = _shape_text(shape)
+            if text:
+                body_blocks.append(text)
+
+        notes_text = ""
+        try:
+            notes_text = _clean_text(slide.notes_slide.notes_text_frame.text.splitlines())
+        except Exception:  # pragma: no cover
+            notes_text = ""
+
+        slide_parts = [slide_header]
+        if body_blocks:
+            slide_parts.append("\n\n".join(body_blocks))
+        if notes_text:
+            slide_parts.append(f"Speaker notes:\n{notes_text}")
+
+        if len(slide_parts) > 1:
+            extracted.append("\n\n".join(slide_parts))
+
+    return "\n\n".join(extracted).strip()
+
+
+def _shape_text(shape: object) -> str:
+    if shape is None or not getattr(shape, "has_text_frame", False):
+        return ""
+    raw_text = getattr(shape, "text", "") or ""
+    return _clean_text(raw_text.splitlines())
 
 
 def _extract_txt_text(file_bytes: bytes) -> str:

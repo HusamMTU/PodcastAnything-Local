@@ -16,7 +16,7 @@ Supported inputs:
 - webpage URL
 - YouTube URL
 - pasted text
-- uploaded `.txt`, `.pdf`, or `.docx`
+- uploaded `.txt`, `.pdf`, `.docx`, or `.pptx`
 
 ## What You Get
 
@@ -211,6 +211,7 @@ OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 
 TTS_PROVIDER=piper
+TTS_DEFAULT_VOICE=./data/piper_voices/en_US-ryan-high.onnx
 PIPER_MODEL_PATH=./data/piper_voices/en_US-lessac-high.onnx
 PIPER_CONFIG_PATH=./data/piper_voices/en_US-lessac-high.onnx.json
 PIPER_MODEL_PATH_B=./data/piper_voices/en_US-ryan-high.onnx
@@ -219,8 +220,8 @@ PIPER_SPEAKER_ID=
 PIPER_SPEAKER_ID_B=
 ```
 
-In this recommended duo setup, `HOST_A` uses `lessac-high` and `HOST_B` uses
-`ryan-high`.
+In this recommended setup, single-host podcasts default to `ryan-high`. For
+duo mode, `HOST_A` uses `lessac-high` and `HOST_B` uses `ryan-high`.
 
 If you want local rewrite instead of OpenAI, switch to:
 

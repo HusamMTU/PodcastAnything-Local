@@ -52,6 +52,7 @@ def test_root_serves_built_in_ui(tmp_path: Path) -> None:
         assert "Podcast mode" in response.text
         assert 'data-source-mode="text"' in response.text
         assert 'name="source_text"' in response.text
+        assert 'accept=".txt,.pdf,.docx,.pptx"' in response.text
         assert 'class="field-grid field-grid-compact form-span-full"' in response.text
         assert '<details class="artifact-card artifact-card-collapsible">' in response.text
         assert "Title override" not in response.text

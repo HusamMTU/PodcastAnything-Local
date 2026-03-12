@@ -140,7 +140,11 @@ class PiperTTSProvider:
         if cleaned_voice:
             candidate_path = Path(cleaned_voice).expanduser()
             if candidate_path.exists():
-                model_path = str(candidate_path.resolve())
+                resolved_path = candidate_path.resolve()
+                model_path = str(resolved_path)
+                sibling_config_path = Path(f"{resolved_path}.json")
+                if sibling_config_path.exists():
+                    config_path = str(sibling_config_path.resolve())
             else:
                 speaker_id = cleaned_voice
 

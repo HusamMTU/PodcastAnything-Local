@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import time
+from io import BytesIO
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+from pptx import Presentation
 
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.main import create_app
@@ -158,6 +160,44 @@ def test_create_job_from_pasted_text(tmp_path: Path) -> None:
         artifacts_payload = artifacts_response.json()
         artifacts = {item["name"] for item in artifacts_payload}
         assert {"audio.wav", "input_pasted_text.txt", "metadata.json", "script.txt", "source.txt"} <= artifacts
+
+
+def test_create_job_from_uploaded_pptx_file(tmp_path: Path) -> None:
+    presentation = Presentation()
+    slide = presentation.slides.add_slide(presentation.slide_layouts[1])
+    slide.shapes.title.text = "Quantum deck"
+    slide.placeholders[1].text = "Quanta\nPhotons"
+    slide.notes_slide.notes_text_frame.text = "Frame this as a short primer."
+    buffer = BytesIO()
+    presentation.save(buffer)
+
+    app = create_app(_build_settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/jobs",
+            data={"script_mode": "single"},
+            files={
+                "source_file": (
+                    "deck.pptx",
+                    buffer.getvalue(),
+                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                )
+            },
+        )
+
+        assert response.status_code == 202
+        payload = response.json()
+        assert payload["source_kind"] == "file"
+        assert payload["source_file_name"] == "deck.pptx"
+
+        terminal_payload = _wait_for_terminal_job_state(client, payload["job_id"])
+        assert terminal_payload["status"] == "completed"
+        assert terminal_payload["metadata"]["source_type"] == "pptx"
+
+        artifacts_response = client.get(f"/jobs/{payload['job_id']}/artifacts")
+        artifacts_payload = artifacts_response.json()
+        artifacts = {item["name"] for item in artifacts_payload}
+        assert {"audio.wav", "input_deck.pptx", "metadata.json", "script.txt", "source.txt"} <= artifacts
 
 
 def test_download_job_artifact_returns_404_for_missing_artifact(tmp_path: Path) -> None:
