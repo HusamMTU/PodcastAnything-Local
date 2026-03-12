@@ -45,7 +45,6 @@ jobs:
       - name: Run OpenAI smoke test
         if: ${{ env.OPENAI_API_KEY != '' }}
         env:
-          REWRITE_PROVIDER: openai
           OPENAI_BASE_URL: https://api.openai.com/v1
           OPENAI_MODEL: gpt-4o-mini
         run: python scripts/test_openai_live.py --output data/openai_rewrite_ci.txt

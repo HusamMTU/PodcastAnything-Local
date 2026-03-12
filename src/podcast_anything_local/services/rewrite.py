@@ -4,12 +4,9 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from collections.abc import Callable
 
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.providers.rewrite.base import RewriteProvider, RewriteProviderError
-from podcast_anything_local.providers.rewrite.demo import DemoRewriteProvider
-from podcast_anything_local.providers.rewrite.ollama import OllamaRewriteProvider
 from podcast_anything_local.providers.rewrite.openai_compatible import (
     OpenAICompatibleRewriteProvider,
 )
@@ -97,30 +94,15 @@ class RewriteService:
         style: str,
         source_type: str | None,
         script_mode: str,
-        provider_name: str | None,
-        on_chunk: Callable[[str], None] | None = None,
     ) -> str:
-        provider = self._build_provider(provider_name or self._settings.rewrite_provider)
-        stream_rewrite = getattr(provider, "stream_rewrite", None)
-        if on_chunk is not None and callable(stream_rewrite):
-            script = stream_rewrite(
-                source_text=source_text,
-                title=title,
-                style=style,
-                source_type=source_type,
-                script_mode=script_mode,
-                on_chunk=on_chunk,
-            )
-        else:
-            script = provider.rewrite(
-                source_text=source_text,
-                title=title,
-                style=style,
-                source_type=source_type,
-                script_mode=script_mode,
-            )
-            if on_chunk is not None and script:
-                on_chunk(script)
+        provider = self._build_provider()
+        script = provider.rewrite(
+            source_text=source_text,
+            title=title,
+            style=style,
+            source_type=source_type,
+            script_mode=script_mode,
+        )
         cleaned = script.strip()
         if not cleaned:
             raise RewriteProviderError("Rewrite provider returned an empty script.")
@@ -150,9 +132,8 @@ class RewriteService:
         script_text: str,
         source_type: str | None,
         script_mode: str,
-        provider_name: str | None,
     ) -> str:
-        provider = self._build_provider(provider_name or self._settings.rewrite_provider)
+        provider = self._build_provider()
         generated = provider.generate_title(
             script_text=script_text,
             source_type=source_type,
@@ -160,23 +141,12 @@ class RewriteService:
         )
         return clean_generated_title(generated)
 
-    def _build_provider(self, provider_name: str) -> RewriteProvider:
-        normalized = provider_name.strip().lower()
-        if normalized == "demo":
-            return DemoRewriteProvider()
-        if normalized == "ollama":
-            return OllamaRewriteProvider(
-                base_url=self._settings.ollama_base_url,
-                model=self._settings.ollama_model,
-                generate_timeout_seconds=self._settings.ollama_generate_timeout_seconds,
-            )
-        if normalized == "openai":
-            return OpenAICompatibleRewriteProvider(
-                base_url=self._settings.openai_base_url,
-                api_key=self._settings.openai_api_key,
-                model=self._settings.openai_model,
-            )
-        raise RewriteProviderError(f"Unsupported rewrite provider: {provider_name}")
+    def _build_provider(self) -> RewriteProvider:
+        return OpenAICompatibleRewriteProvider(
+            base_url=self._settings.openai_base_url,
+            api_key=self._settings.openai_api_key,
+            model=self._settings.openai_model,
+        )
 
 
 def _normalize_duo_script(script_text: str) -> str:

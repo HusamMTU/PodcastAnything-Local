@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 
 from podcast_anything_local.db.repository import JobRepository
-from podcast_anything_local.jobs.events import JobEventBroker
 from podcast_anything_local.services.audio import AudioService
 from podcast_anything_local.services.document_pipeline import MultimodalDocumentService
 from podcast_anything_local.services.ingestion import IngestionService
@@ -23,7 +22,6 @@ class PipelineService:
         rewrite_service: RewriteService,
         document_service: MultimodalDocumentService,
         audio_service: AudioService,
-        job_event_broker: JobEventBroker,
     ) -> None:
         self._repository = repository
         self._artifact_store = artifact_store
@@ -31,7 +29,6 @@ class PipelineService:
         self._rewrite_service = rewrite_service
         self._document_service = document_service
         self._audio_service = audio_service
-        self._job_event_broker = job_event_broker
 
     def run_job(self, job_id: str) -> None:
         stage = "ingesting"
@@ -56,13 +53,9 @@ class PipelineService:
             multimodal_pdf = self._document_service.should_use(
                 source_type=source_type,
                 source_file_path=job.source_file_path,
-                rewrite_provider=job.rewrite_provider,
             )
             if source_type == "pdf" and not source_text.strip() and not multimodal_pdf:
-                raise RuntimeError(
-                    "This PDF does not contain extractable text. Use the OpenAI rewrite provider "
-                    "for multimodal PDF analysis."
-                )
+                raise RuntimeError("This PDF does not contain extractable text for processing.")
             if multimodal_pdf:
                 stage = "analyzing"
                 self._repository.update_stage(job_id, stage)
@@ -70,7 +63,6 @@ class PipelineService:
                     source_file_path=job.source_file_path or "",
                     title=job.title,
                     script_mode=job.script_mode,
-                    rewrite_provider=job.rewrite_provider,
                 )
                 for filename, content in self._document_service.build_artifacts(
                     analysis=analysis,
@@ -87,7 +79,6 @@ class PipelineService:
                     document_map=analysis.document_map,
                     title=job.title,
                     script_mode=job.script_mode,
-                    rewrite_provider=job.rewrite_provider,
                 )
                 rewrite_source_text = self._document_service.build_rewrite_source_text(
                     analysis=analysis,
@@ -135,8 +126,6 @@ class PipelineService:
                 style=job.style,
                 source_type=source_type,
                 script_mode=job.script_mode,
-                provider_name=job.rewrite_provider,
-                on_chunk=lambda chunk: self._job_event_broker.publish_rewrite_chunk(job_id, chunk),
             )
             generated_title = job.title
             title_metadata: dict[str, object] = {}
@@ -146,12 +135,10 @@ class PipelineService:
                         script_text=script_text,
                         source_type=str(job.metadata.get("source_type") or ""),
                         script_mode=job.script_mode,
-                        provider_name=job.rewrite_provider,
                     )
                     title_metadata["title_source"] = "llm"
                 except Exception as exc:
                     title_metadata["title_generation_error"] = str(exc)
-            self._job_event_broker.publish_rewrite_complete(job_id)
             script_path = self._artifact_store.write_text(job_id, "script.txt", script_text)
             self._repository.record_artifact(
                 job_id,
@@ -196,7 +183,6 @@ class PipelineService:
                         "title": final_job.title,
                         "style": final_job.style,
                         "script_mode": final_job.script_mode,
-                        "rewrite_provider": final_job.rewrite_provider,
                         "tts_provider": final_job.tts_provider,
                         "metadata": final_job.metadata,
                     },
@@ -210,6 +196,5 @@ class PipelineService:
             )
             self._repository.mark_completed(job_id)
         except Exception as exc:
-            self._job_event_broker.publish_job_failed(job_id, str(exc))
             self._repository.mark_failed(job_id, str(exc), stage)
             raise

@@ -8,7 +8,6 @@ from fastapi import FastAPI
 
 from podcast_anything_local.api.routes import router
 from podcast_anything_local.core.config import Settings, load_settings
-from podcast_anything_local.jobs.events import JobEventBroker
 from podcast_anything_local.db.repository import JobRepository
 from podcast_anything_local.jobs.executor import JobExecutor
 from podcast_anything_local.services.audio import AudioService
@@ -33,7 +32,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         rewrite_service = RewriteService(resolved_settings)
         document_service = MultimodalDocumentService(resolved_settings)
         audio_service = AudioService(resolved_settings)
-        job_event_broker = JobEventBroker()
         pipeline_service = PipelineService(
             repository=repository,
             artifact_store=artifact_store,
@@ -41,7 +39,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             rewrite_service=rewrite_service,
             document_service=document_service,
             audio_service=audio_service,
-            job_event_broker=job_event_broker,
         )
         executor = JobExecutor(repository=repository, pipeline_service=pipeline_service)
 
@@ -49,7 +46,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         app.state.repository = repository
         app.state.artifact_store = artifact_store
         app.state.executor = executor
-        app.state.job_event_broker = job_event_broker
 
         executor.start()
         try:

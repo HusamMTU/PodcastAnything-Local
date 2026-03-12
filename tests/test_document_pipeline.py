@@ -90,11 +90,7 @@ def _build_settings(tmp_path: Path) -> Settings:
         database_path=data_dir / "app.db",
         jobs_dir=data_dir / "jobs",
         web_extractor="auto",
-        rewrite_provider="openai",
         rewrite_style="podcast",
-        ollama_base_url="http://localhost:11434/api",
-        ollama_model="gemma3:4b",
-        ollama_generate_timeout_seconds=600,
         openai_base_url="https://api.openai.com/v1",
         openai_api_key=None,
         openai_model="gpt-4o-mini",
@@ -124,20 +120,18 @@ def test_multimodal_document_service_builds_chunks_and_plan(tmp_path: Path) -> N
     fake_provider = _FakeDocumentProvider()
     service = MultimodalDocumentService(
         _build_settings(tmp_path),
-        provider_factory=lambda provider_name: fake_provider,
+        provider_factory=lambda: fake_provider,
     )
 
     assert service.should_use(
         source_type="pdf",
         source_file_path=str(pdf_path),
-        rewrite_provider="openai",
     )
 
     analysis = service.analyze_pdf_document(
         source_file_path=str(pdf_path),
         title="Quantum Notes",
         script_mode="single",
-        rewrite_provider="openai",
     )
     assert analysis.page_count == 7
     assert fake_provider.chunk_calls == [(1, 1, 6), (2, 6, 7)]
@@ -147,7 +141,6 @@ def test_multimodal_document_service_builds_chunks_and_plan(tmp_path: Path) -> N
         document_map=analysis.document_map,
         title="Quantum Notes",
         script_mode="single",
-        rewrite_provider="openai",
     )
     rewrite_source = service.build_rewrite_source_text(
         analysis=analysis,

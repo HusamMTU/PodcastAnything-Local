@@ -8,8 +8,8 @@ document into:
 
 The recommended path in this repo is:
 
-- `openai` for script rewriting
-- `piper` for speech synthesis
+- `OpenAI` for podcast script writing
+- `Piper` for speech synthesis
 
 Supported inputs:
 
@@ -18,7 +18,7 @@ Supported inputs:
 - pasted text
 - uploaded `.txt`, `.pdf`, `.docx`, or `.pptx`
 
-Uploaded PDFs use a hierarchical multimodal pipeline when `REWRITE_PROVIDER=openai`:
+Uploaded PDFs use a hierarchical multimodal pipeline with OpenAI:
 
 - PDF chunk summaries
 - a merged document map
@@ -61,8 +61,8 @@ cp .env.example .env
 
 `.env.example` is already set up for the recommended stack:
 
-- `REWRITE_PROVIDER=openai`
-- `TTS_PROVIDER=piper`
+- `OpenAI` for script writing
+- `Piper` for TTS
 
 Then add your OpenAI API key to `.env`:
 
@@ -98,7 +98,6 @@ Open `http://127.0.0.1:8000/` and:
 - choose URL, Text, or Upload
 - submit a source
 - watch the job status
-- if you switch a job to `ollama`, the script preview can stream live during rewrite
 - preview the generated script
 - play or download the generated audio
 
@@ -179,7 +178,6 @@ Available endpoints:
 - `POST /jobs`
 - `GET /jobs`
 - `GET /jobs/{job_id}`
-- `GET /jobs/{job_id}/rewrite-stream`
 - `GET /jobs/{job_id}/artifacts`
 - `GET /jobs/{job_id}/artifacts/{artifact_name}`
 - `POST /jobs/{job_id}/retry`
@@ -223,7 +221,6 @@ The recommended configuration is:
 
 ```bash
 WEB_EXTRACTOR=auto
-REWRITE_PROVIDER=openai
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
@@ -244,19 +241,9 @@ duo mode, `HOST_A` uses `lessac-high` and `HOST_B` uses `ryan-high`.
 For long PDFs where layout, figures, and page visuals matter, a stronger OpenAI
 model such as `gpt-4.1` is usually a better choice than `gpt-4o-mini`.
 
-If you want local rewrite instead of OpenAI, switch to:
-
-```bash
-REWRITE_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434/api
-OLLAMA_MODEL=gemma3:4b
-OLLAMA_GENERATE_TIMEOUT_SECONDS=600
-```
-
 Most important settings:
 
 - `WEB_EXTRACTOR`
-- `REWRITE_PROVIDER`
 - `TTS_PROVIDER`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
@@ -268,36 +255,20 @@ If you want hosted TTS instead of local Piper:
 
 - set `TTS_PROVIDER=elevenlabs` and fill in `ELEVENLABS_API_KEY`
 
-`REWRITE_PROVIDER=openai` is the default and recommended rewrite path in this
-repo. If you are using a local rewrite model on a limited machine such as a
-laptop or a small server, it is generally recommended to stay at or under
-roughly `9B` parameters. Larger local models can become too slow or unreliable
-for this workflow. If you want local rewrite, treat `ollama` as an optional
-alternative rather than the default.
+OpenAI is the only built-in podcast script writer in this repo. The rewrite
+provider boundary is still isolated in code so future providers such as Grok or
+Claude can be added later without reworking the rest of the pipeline.
 
 ## Notes
 
 - `WEB_EXTRACTOR=auto` tries `trafilatura` first and falls back to `bs4`
 - `WEB_EXTRACTOR=trafilatura` forces article extraction through `trafilatura`
 - `WEB_EXTRACTOR=bs4` forces the simpler BeautifulSoup paragraph extractor
-- uploaded PDFs use a hierarchical multimodal OpenAI path only when
-  `REWRITE_PROVIDER=openai`
+- uploaded PDFs use a hierarchical multimodal OpenAI path
 - PDFs without extractable embedded text can still work through the multimodal
   OpenAI path
-- PDFs without extractable embedded text will fail with non-OpenAI rewrite
-  providers
-- for OpenAI rewrite jobs, the UI shows job status and the final script when it
-  is ready
-- for Ollama rewrite jobs, the built-in UI opens a live SSE stream so the
-  script preview updates while the rewrite is still generating
-- `make setup-ollama` checks whether the local Ollama API is reachable and
-  whether the configured model exists
-- `make pull-ollama-model` asks the local Ollama service to download the model
-- `make test-ollama-local` writes a sample rewrite through the project provider
 - rewritten scripts are targeted to about 2-4 minutes of spoken audio and are
   capped to an approximate spoken-word budget before TTS
-- if Ollama is slow on your machine, increase `OLLAMA_GENERATE_TIMEOUT_SECONDS`
-  in `.env`
 - `make test-piper-local` writes a sample WAV through the project provider
 - `make test-piper-local-duo` writes a two-host WAV using `PIPER_MODEL_PATH` for
   `HOST_A` and `PIPER_MODEL_PATH_B` for `HOST_B`
@@ -315,7 +286,7 @@ make test
 
 ## CI
 
-This repo includes three GitHub Actions workflows:
+This repo includes two GitHub Actions workflows:
 
 - `CI`
   Runs on every pull request and on pushes to `main`. It installs the project,
@@ -325,11 +296,6 @@ This repo includes three GitHub Actions workflows:
   Runs on `workflow_dispatch` and nightly. It runs a real OpenAI rewrite smoke
   test and a real Piper smoke test. To enable the OpenAI job, add the
   `OPENAI_API_KEY` GitHub Actions secret to the repository.
-- `Integration Local Models`
-  Runs on `workflow_dispatch` only. It is meant for a self-hosted runner with
-  a custom `ollama` label and a working local Ollama service. It runs a real
-  Ollama rewrite smoke test plus a real Piper smoke test and uploads both
-  artifacts.
 
 If you want to mirror the required CI locally, run:
 
@@ -341,14 +307,7 @@ Verified locally:
 
 - `make test`
 - `make test-piper-local`
-- `make test-ollama-local MODEL=gemma3:4b`
-
-Development-only fallback providers still exist for testing and bring-up:
-
-- rewrite: `demo`
-- TTS: `wave`
-
-They are not the recommended path for actual output generation.
+- `make test-openai-live MODEL=gpt-4o-mini`
 
 ## Troubleshooting
 
@@ -356,5 +315,5 @@ They are not the recommended path for actual output generation.
 - If `.env` changes are not reflected, restart the API process.
 - If `make test-piper-local` fails, check that the Piper voice files exist under
   `data/piper_voices/`.
-- If `make setup-ollama` or `make test-ollama-local` fails, confirm Ollama is
-  running and serving `OLLAMA_BASE_URL`.
+- If `make test-openai-live` fails, confirm `OPENAI_API_KEY` is set and the
+  selected `OPENAI_MODEL` is available to your account.

@@ -11,6 +11,9 @@ from pptx import Presentation
 
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.main import create_app
+from podcast_anything_local.providers.rewrite.openai_compatible import (
+    OpenAICompatibleRewriteProvider,
+)
 from podcast_anything_local.services.ingestion import IngestionService
 
 
@@ -23,13 +26,9 @@ def _build_settings(tmp_path: Path) -> Settings:
         database_path=data_dir / "app.db",
         jobs_dir=data_dir / "jobs",
         web_extractor="auto",
-        rewrite_provider="demo",
         rewrite_style="podcast",
-        ollama_base_url="http://localhost:11434/api",
-        ollama_model="gemma3:4b",
-        ollama_generate_timeout_seconds=600,
         openai_base_url="https://api.openai.com/v1",
-        openai_api_key=None,
+        openai_api_key="test-key",
         openai_model="gpt-4o-mini",
         tts_provider="wave",
         tts_default_voice="host_a",
@@ -55,11 +54,7 @@ def _build_openai_settings(tmp_path: Path) -> Settings:
         database_path=data_dir / "app.db",
         jobs_dir=data_dir / "jobs",
         web_extractor="auto",
-        rewrite_provider="openai",
         rewrite_style="podcast",
-        ollama_base_url="http://localhost:11434/api",
-        ollama_model="gemma3:4b",
-        ollama_generate_timeout_seconds=600,
         openai_base_url="https://api.openai.com/v1",
         openai_api_key="test-key",
         openai_model="gpt-4o-mini",
@@ -78,6 +73,24 @@ def _build_openai_settings(tmp_path: Path) -> Settings:
     )
 
 
+def _stub_openai_provider(
+    monkeypatch,
+    *,
+    script: str = "Welcome back. Today we're recording a local podcast draft.",
+    title: str = "Local Podcast Draft",
+) -> None:
+    monkeypatch.setattr(
+        OpenAICompatibleRewriteProvider,
+        "rewrite",
+        lambda self, **kwargs: script,
+    )
+    monkeypatch.setattr(
+        OpenAICompatibleRewriteProvider,
+        "generate_title",
+        lambda self, **kwargs: title,
+    )
+
+
 def _wait_for_terminal_job_state(client: TestClient, job_id: str) -> dict:
     deadline = time.time() + 5
     while time.time() < deadline:
@@ -91,6 +104,16 @@ def _wait_for_terminal_job_state(client: TestClient, job_id: str) -> dict:
 
 def test_create_job_from_url_runs_pipeline(tmp_path: Path, monkeypatch) -> None:
     source_text = "Example source material for a local podcast run."
+    _stub_openai_provider(
+        monkeypatch,
+        script=(
+            "HOST_A: Welcome back.\n"
+            "HOST_B: Glad to be here.\n"
+            "HOST_A: Today we're talking quantum mechanics.\n"
+            "HOST_B: Let's get into it."
+        ),
+        title="Local Podcast Conversation",
+    )
 
     def fake_ingest(self, *, source_kind=None, source_url=None, source_file_path=None, source_file_name=None):
         assert source_kind == "url"
@@ -137,7 +160,36 @@ def test_create_job_from_url_runs_pipeline(tmp_path: Path, monkeypatch) -> None:
         assert "Welcome back" in download_response.text or len(download_response.text) > 20
 
 
-def test_create_job_from_uploaded_txt_file(tmp_path: Path) -> None:
+def test_create_job_from_pasted_text(tmp_path: Path, monkeypatch) -> None:
+    _stub_openai_provider(monkeypatch)
+    app = create_app(_build_settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/jobs",
+            data={
+                "source_text": "Pasted text for a short podcast draft.",
+                "script_mode": "single",
+            },
+        )
+
+        assert response.status_code == 202
+        payload = response.json()
+        assert payload["source_kind"] == "text"
+        assert payload["source_file_name"] == "pasted_text.txt"
+
+        terminal_payload = _wait_for_terminal_job_state(client, payload["job_id"])
+        assert terminal_payload["status"] == "completed"
+        assert terminal_payload["metadata"]["source_type"] == "text"
+        assert terminal_payload["metadata"]["submitted_text_char_count"] == 38
+
+        artifacts_response = client.get(f"/jobs/{payload['job_id']}/artifacts")
+        artifacts_payload = artifacts_response.json()
+        artifacts = {item["name"] for item in artifacts_payload}
+        assert {"audio.wav", "input_pasted_text.txt", "metadata.json", "script.txt", "source.txt"} <= artifacts
+
+
+def test_create_job_from_uploaded_txt_file(tmp_path: Path, monkeypatch) -> None:
+    _stub_openai_provider(monkeypatch)
     app = create_app(_build_settings(tmp_path))
     with TestClient(app) as client:
         response = client.post(
@@ -169,34 +221,8 @@ def test_create_job_from_uploaded_txt_file(tmp_path: Path) -> None:
         assert len(audio_response.content) > 100
 
 
-def test_create_job_from_pasted_text(tmp_path: Path) -> None:
-    app = create_app(_build_settings(tmp_path))
-    with TestClient(app) as client:
-        response = client.post(
-            "/jobs",
-            data={
-                "source_text": "Pasted text for a short podcast draft.",
-                "script_mode": "single",
-            },
-        )
-
-        assert response.status_code == 202
-        payload = response.json()
-        assert payload["source_kind"] == "text"
-        assert payload["source_file_name"] == "pasted_text.txt"
-
-        terminal_payload = _wait_for_terminal_job_state(client, payload["job_id"])
-        assert terminal_payload["status"] == "completed"
-        assert terminal_payload["metadata"]["source_type"] == "text"
-        assert terminal_payload["metadata"]["submitted_text_char_count"] == 38
-
-        artifacts_response = client.get(f"/jobs/{payload['job_id']}/artifacts")
-        artifacts_payload = artifacts_response.json()
-        artifacts = {item["name"] for item in artifacts_payload}
-        assert {"audio.wav", "input_pasted_text.txt", "metadata.json", "script.txt", "source.txt"} <= artifacts
-
-
-def test_create_job_from_uploaded_pptx_file(tmp_path: Path) -> None:
+def test_create_job_from_uploaded_pptx_file(tmp_path: Path, monkeypatch) -> None:
+    _stub_openai_provider(monkeypatch)
     presentation = Presentation()
     slide = presentation.slides.add_slide(presentation.slide_layouts[1])
     slide.shapes.title.text = "Quantum deck"
@@ -395,7 +421,10 @@ def test_create_job_from_uploaded_pdf_uses_multimodal_document_pipeline(
         } <= artifacts
 
 
-def test_download_job_artifact_returns_404_for_missing_artifact(tmp_path: Path) -> None:
+def test_download_job_artifact_returns_404_for_missing_artifact(
+    tmp_path: Path, monkeypatch
+) -> None:
+    _stub_openai_provider(monkeypatch)
     app = create_app(_build_settings(tmp_path))
     with TestClient(app) as client:
         response = client.post(
@@ -411,7 +440,8 @@ def test_download_job_artifact_returns_404_for_missing_artifact(tmp_path: Path) 
         assert missing_response.status_code == 404
 
 
-def test_retry_job_clears_stale_generated_artifacts(tmp_path: Path) -> None:
+def test_retry_job_clears_stale_generated_artifacts(tmp_path: Path, monkeypatch) -> None:
+    _stub_openai_provider(monkeypatch)
     app = create_app(_build_settings(tmp_path))
     with TestClient(app) as client:
         response = client.post(
@@ -452,51 +482,3 @@ def test_retry_job_clears_stale_generated_artifacts(tmp_path: Path) -> None:
             item["name"] for item in client.get(f"/jobs/{job_id}/artifacts").json()
         }
         assert artifacts_after_retry == {"input_brief.txt"}
-
-
-def test_rewrite_stream_route_replays_snapshot_and_completion(tmp_path: Path) -> None:
-    app = create_app(_build_settings(tmp_path))
-    with TestClient(app) as client:
-        client.app.state.executor.submit = lambda _: None
-        response = client.post(
-            "/jobs",
-            json={
-                "source_url": "https://example.com/article",
-                "script_mode": "single",
-            },
-        )
-
-        job_id = response.json()["job_id"]
-        broker = client.app.state.job_event_broker
-        broker.publish_rewrite_chunk(job_id, "Hello ")
-        broker.publish_rewrite_chunk(job_id, "world.")
-        broker.publish_rewrite_complete(job_id)
-
-        with client.stream("GET", f"/jobs/{job_id}/rewrite-stream") as stream_response:
-            body = "".join(stream_response.iter_text())
-
-        assert stream_response.status_code == 200
-        assert "event: rewrite_snapshot" in body
-        assert '"text": "Hello world."' in body
-        assert "event: rewrite_complete" in body
-
-
-def test_rewrite_preview_route_returns_current_snapshot(tmp_path: Path) -> None:
-    app = create_app(_build_settings(tmp_path))
-    with TestClient(app) as client:
-        client.app.state.executor.submit = lambda _: None
-        response = client.post(
-            "/jobs",
-            json={
-                "source_url": "https://example.com/article",
-                "script_mode": "single",
-            },
-        )
-
-        job_id = response.json()["job_id"]
-        client.app.state.job_event_broker.publish_rewrite_chunk(job_id, "Partial script")
-
-        preview_response = client.get(f"/jobs/{job_id}/rewrite-preview")
-
-        assert preview_response.status_code == 200
-        assert preview_response.json() == {"text": "Partial script"}

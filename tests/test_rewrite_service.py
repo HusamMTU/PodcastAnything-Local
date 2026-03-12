@@ -43,11 +43,7 @@ def _build_settings(tmp_path: Path) -> Settings:
         database_path=data_dir / "app.db",
         jobs_dir=data_dir / "jobs",
         web_extractor="auto",
-        rewrite_provider="ollama",
         rewrite_style="podcast",
-        ollama_base_url="http://localhost:11434/api",
-        ollama_model="gemma3:4b",
-        ollama_generate_timeout_seconds=600,
         openai_base_url="https://api.openai.com/v1",
         openai_api_key=None,
         openai_model="gpt-4o-mini",
@@ -71,7 +67,7 @@ def test_rewrite_service_normalizes_common_duo_labels(tmp_path: Path, monkeypatc
     monkeypatch.setattr(
         service,
         "_build_provider",
-        lambda provider_name: _FakeProvider(
+        lambda: _FakeProvider(
             """
 **Host:** Welcome back.
 **Co-host:** Glad to be here.
@@ -87,7 +83,6 @@ Co-host: Let's get into it.
         style="podcast",
         source_type="text",
         script_mode="duo",
-        provider_name="ollama",
     )
 
     assert result == (
@@ -103,7 +98,7 @@ def test_rewrite_service_normalizes_named_speakers(tmp_path: Path, monkeypatch) 
     monkeypatch.setattr(
         service,
         "_build_provider",
-        lambda provider_name: _FakeProvider(
+        lambda: _FakeProvider(
             """
 Intro: cold open
 Alice: Welcome back.
@@ -120,7 +115,6 @@ Bob: Let's start with the photoelectric effect.
         style="podcast",
         source_type="text",
         script_mode="duo",
-        provider_name="ollama",
     )
 
     assert result == (
@@ -136,7 +130,7 @@ def test_rewrite_service_errors_early_for_unparseable_duo_output(tmp_path: Path,
     monkeypatch.setattr(
         service,
         "_build_provider",
-        lambda provider_name: _FakeProvider("This is a monologue instead of a duo script."),
+        lambda: _FakeProvider("This is a monologue instead of a duo script."),
     )
 
     try:
@@ -146,7 +140,6 @@ def test_rewrite_service_errors_early_for_unparseable_duo_output(tmp_path: Path,
             style="podcast",
             source_type="text",
             script_mode="duo",
-            provider_name="ollama",
         )
     except RewriteProviderError as exc:
         assert "recognizable speaker turns" in str(exc)
@@ -161,7 +154,7 @@ def test_rewrite_service_rejects_duo_output_with_too_few_real_turns(
     monkeypatch.setattr(
         service,
         "_build_provider",
-        lambda provider_name: _FakeProvider(
+        lambda: _FakeProvider(
             """
 HOST_A: Let me set the stage.
 HOST_B: Great, now here is a detailed outline.
@@ -182,7 +175,6 @@ HOST_B: Great, now here is a detailed outline.
             style="podcast",
             source_type="text",
             script_mode="duo",
-            provider_name="ollama",
         )
     except RewriteProviderError as exc:
         assert "enough distinct speaker turns" in str(exc)
@@ -252,7 +244,7 @@ def test_rewrite_service_truncates_long_single_script_to_target_duration(
     monkeypatch.setattr(
         service,
         "_build_provider",
-        lambda provider_name: _FakeProvider(long_script),
+        lambda: _FakeProvider(long_script),
     )
 
     result = service.rewrite(
@@ -261,7 +253,6 @@ def test_rewrite_service_truncates_long_single_script_to_target_duration(
         style="podcast",
         source_type="text",
         script_mode="single",
-        provider_name="ollama",
     )
 
     assert len(result.split()) <= MAX_SPOKEN_WORDS + 5
@@ -285,7 +276,7 @@ def test_rewrite_service_truncates_long_duo_script_to_target_duration(
     monkeypatch.setattr(
         service,
         "_build_provider",
-        lambda provider_name: _FakeProvider(long_script),
+        lambda: _FakeProvider(long_script),
     )
 
     result = service.rewrite(
@@ -294,7 +285,6 @@ def test_rewrite_service_truncates_long_duo_script_to_target_duration(
         style="podcast",
         source_type="text",
         script_mode="duo",
-        provider_name="ollama",
     )
 
     spoken_words = [
@@ -311,7 +301,7 @@ def test_rewrite_service_generates_clean_title_from_provider(tmp_path: Path, mon
     monkeypatch.setattr(
         service,
         "_build_provider",
-        lambda provider_name: _FakeProvider(
+        lambda: _FakeProvider(
             "Script text.",
             title_response='Title: "Quantum Mechanics, Clearly"',
         ),
@@ -321,7 +311,6 @@ def test_rewrite_service_generates_clean_title_from_provider(tmp_path: Path, mon
         script_text="HOST_A: Welcome back.\nHOST_B: Glad to be here.",
         source_type="webpage",
         script_mode="duo",
-        provider_name="ollama",
     )
 
     assert result == "Quantum Mechanics, Clearly"

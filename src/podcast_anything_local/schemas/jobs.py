@@ -16,7 +16,6 @@ class CreateJobRequest(BaseModel):
     title: str | None = None
     style: str = "podcast"
     script_mode: Literal["single", "duo"] = "single"
-    rewrite_provider: str | None = None
     tts_provider: str | None = None
     voice_id: str | None = None
     voice_id_b: str | None = None
@@ -50,7 +49,6 @@ class JobResponse(BaseModel):
     title: str | None
     style: str
     script_mode: str
-    rewrite_provider: str
     tts_provider: str
     voice_id: str | None
     voice_id_b: str | None
@@ -76,7 +74,6 @@ class JobResponse(BaseModel):
             title=record.title,
             style=record.style,
             script_mode=record.script_mode,
-            rewrite_provider=record.rewrite_provider,
             tts_provider=record.tts_provider,
             voice_id=record.voice_id,
             voice_id_b=record.voice_id_b,
