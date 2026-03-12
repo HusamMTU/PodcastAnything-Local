@@ -12,6 +12,7 @@ from podcast_anything_local.storage.artifacts import ArtifactInfo
 
 class CreateJobRequest(BaseModel):
     source_url: str | None = None
+    source_text: str | None = None
     title: str | None = None
     style: str = "podcast"
     script_mode: Literal["single", "duo"] = "single"

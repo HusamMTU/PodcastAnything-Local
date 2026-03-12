@@ -56,7 +56,8 @@ def _wait_for_terminal_job_state(client: TestClient, job_id: str) -> dict:
 def test_create_job_from_url_runs_pipeline(tmp_path: Path, monkeypatch) -> None:
     source_text = "Example source material for a local podcast run."
 
-    def fake_ingest(self, *, source_url=None, source_file_path=None, source_file_name=None):
+    def fake_ingest(self, *, source_kind=None, source_url=None, source_file_path=None, source_file_name=None):
+        assert source_kind == "url"
         assert source_url == "https://example.com/article"
         return (
             source_text,
@@ -130,6 +131,33 @@ def test_create_job_from_uploaded_txt_file(tmp_path: Path) -> None:
         assert audio_response.status_code == 200
         assert audio_response.headers["content-type"] in {"audio/wav", "audio/x-wav"}
         assert len(audio_response.content) > 100
+
+
+def test_create_job_from_pasted_text(tmp_path: Path) -> None:
+    app = create_app(_build_settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/jobs",
+            data={
+                "source_text": "Pasted text for a short podcast draft.",
+                "script_mode": "single",
+            },
+        )
+
+        assert response.status_code == 202
+        payload = response.json()
+        assert payload["source_kind"] == "text"
+        assert payload["source_file_name"] == "pasted_text.txt"
+
+        terminal_payload = _wait_for_terminal_job_state(client, payload["job_id"])
+        assert terminal_payload["status"] == "completed"
+        assert terminal_payload["metadata"]["source_type"] == "text"
+        assert terminal_payload["metadata"]["submitted_text_char_count"] == 38
+
+        artifacts_response = client.get(f"/jobs/{payload['job_id']}/artifacts")
+        artifacts_payload = artifacts_response.json()
+        artifacts = {item["name"] for item in artifacts_payload}
+        assert {"audio.wav", "input_pasted_text.txt", "metadata.json", "script.txt", "source.txt"} <= artifacts
 
 
 def test_download_job_artifact_returns_404_for_missing_artifact(tmp_path: Path) -> None:

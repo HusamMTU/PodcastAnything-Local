@@ -11,8 +11,10 @@ const elements = {
   providerSummary: document.getElementById("provider-summary"),
   jobForm: document.getElementById("job-form"),
   sourceUrl: document.getElementById("source-url"),
+  sourceText: document.getElementById("source-text"),
   sourceFile: document.getElementById("source-file"),
   urlFields: document.getElementById("url-fields"),
+  textFields: document.getElementById("text-fields"),
   fileFields: document.getElementById("file-fields"),
   scriptMode: document.getElementById("script-mode"),
   rewriteProvider: document.getElementById("rewrite-provider"),
@@ -92,12 +94,16 @@ function fillSelect(selectElement, values) {
 }
 
 function setSourceMode(mode) {
-  state.sourceMode = mode === "file" ? "file" : "url";
+  state.sourceMode = ["url", "text", "file"].includes(mode) ? mode : "url";
   const isUrl = state.sourceMode === "url";
+  const isText = state.sourceMode === "text";
+  const isFile = state.sourceMode === "file";
   elements.urlFields.classList.toggle("is-hidden", !isUrl);
-  elements.fileFields.classList.toggle("is-hidden", isUrl);
+  elements.textFields.classList.toggle("is-hidden", !isText);
+  elements.fileFields.classList.toggle("is-hidden", !isFile);
   elements.sourceUrl.required = isUrl;
-  elements.sourceFile.required = !isUrl;
+  elements.sourceText.required = isText;
+  elements.sourceFile.required = isFile;
 
   for (const button of elements.modeButtons) {
     button.classList.toggle("is-active", button.dataset.sourceMode === state.sourceMode);
@@ -131,6 +137,12 @@ function buildSubmissionPayload() {
       throw new Error("Provide a source URL.");
     }
     formData.append("source_url", sourceUrl);
+  } else if (state.sourceMode === "text") {
+    const sourceText = elements.sourceText.value.trim();
+    if (!sourceText) {
+      throw new Error("Provide source text.");
+    }
+    formData.append("source_text", sourceText);
   } else {
     const file = elements.sourceFile.files[0];
     if (!file) {

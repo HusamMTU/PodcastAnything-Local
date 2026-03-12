@@ -54,7 +54,8 @@ class _TestClientSession:
 
 
 def test_cli_run_job_from_url_downloads_artifacts(tmp_path: Path, monkeypatch) -> None:
-    def fake_ingest(self, *, source_url=None, source_file_path=None, source_file_name=None):
+    def fake_ingest(self, *, source_kind=None, source_url=None, source_file_path=None, source_file_name=None):
+        assert source_kind == "url"
         assert source_url == "https://example.com/article"
         return (
             "Example source material for the CLI integration test.",

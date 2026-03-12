@@ -61,6 +61,15 @@ async def create_job(request: Request) -> JobResponse:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
         source_file_path = artifact_store.save_uploaded_file(job_id, upload.filename or "upload.bin", file_bytes)
         metadata["uploaded_content_type"] = upload.content_type
+    elif payload["source_text"] is not None:
+        source_text = payload["source_text"]
+        source_file_name = payload["source_file_name"] or "pasted_text.txt"
+        source_file_path = artifact_store.save_uploaded_file(
+            job_id,
+            source_file_name,
+            source_text.encode("utf-8"),
+        )
+        metadata["submitted_text_char_count"] = len(source_text)
 
     record = repository.create_job(
         CreateJobInput(
@@ -196,6 +205,7 @@ async def _parse_create_request(request: Request) -> dict[str, Any]:
         payload = CreateJobRequest.model_validate(await request.json())
         return _normalize_inputs(
             source_url=payload.source_url,
+            source_text=payload.source_text,
             source_file=None,
             title=payload.title,
             style=payload.style,
@@ -212,6 +222,7 @@ async def _parse_create_request(request: Request) -> dict[str, Any]:
         source_file = upload if _is_upload_file(upload) else None
         return _normalize_inputs(
             source_url=_optional_form_value(form.get("source_url")),
+            source_text=_optional_form_value(form.get("source_text")),
             source_file=source_file,
             title=_optional_form_value(form.get("title")),
             style=_optional_form_value(form.get("style")) or "podcast",
@@ -228,6 +239,7 @@ async def _parse_create_request(request: Request) -> dict[str, Any]:
 def _normalize_inputs(
     *,
     source_url: str | None,
+    source_text: str | None,
     source_file: UploadFile | None,
     title: str | None,
     style: str,
@@ -237,15 +249,17 @@ def _normalize_inputs(
     voice_id: str | None,
     voice_id_b: str | None,
 ) -> dict[str, Any]:
-    if bool(source_url) == bool(source_file):
-        raise ValueError("Provide exactly one of source_url or source_file.")
+    input_count = int(bool(source_url)) + int(bool(source_text)) + int(bool(source_file))
+    if input_count != 1:
+        raise ValueError("Provide exactly one of source_url, source_text, or source_file.")
     if script_mode not in {"single", "duo"}:
         raise ValueError("script_mode must be one of: single, duo")
     return {
-        "source_kind": "url" if source_url else "file",
+        "source_kind": "url" if source_url else ("text" if source_text else "file"),
         "source_url": source_url,
+        "source_text": source_text,
         "source_file": source_file,
-        "source_file_name": source_file.filename if source_file else None,
+        "source_file_name": "pasted_text.txt" if source_text else (source_file.filename if source_file else None),
         "title": title,
         "style": style.strip() if style else "podcast",
         "script_mode": script_mode,

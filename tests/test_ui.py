@@ -50,6 +50,10 @@ def test_root_serves_built_in_ui(tmp_path: Path) -> None:
         assert "Podcast Anything" in response.text
         assert "/ui-assets/app.js" in response.text
         assert "Podcast mode" in response.text
+        assert 'data-source-mode="text"' in response.text
+        assert 'name="source_text"' in response.text
+        assert 'class="field-grid field-grid-compact form-span-full"' in response.text
+        assert '<details class="artifact-card artifact-card-collapsible">' in response.text
         assert "Title override" not in response.text
         assert 'name="title"' not in response.text
         assert 'id="job-title-value"' in response.text
@@ -88,10 +92,21 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert css_response.status_code == 200
         assert "background" in css_response.text
         assert "height: 22rem;" in css_response.text
+        assert ".source-textarea" in css_response.text
+        assert ".artifact-card-collapsible" in css_response.text
+        assert ".artifact-summary::after" in css_response.text
+        assert "grid-template-columns: 1fr;" in css_response.text
+        assert "--content-width: 76rem;" in css_response.text
+        assert "max-width: var(--content-width);" in css_response.text
+        assert ".field-grid-compact" in css_response.text
+        assert ".form-span-full" in css_response.text
+        assert "max-height: min(30rem, 60vh);" in css_response.text
+        assert "scrollbar-gutter: stable;" in css_response.text
         assert js_response.status_code == 200
         assert "fetchJson" in js_response.text
         assert "EventSource" in js_response.text
         assert "/rewrite-preview" in js_response.text
+        assert 'source_text' in js_response.text
         assert "loadHealth" not in js_response.text
         assert 'voice_id' not in js_response.text
         assert 'voice_id_b' not in js_response.text
