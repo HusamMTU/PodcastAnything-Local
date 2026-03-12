@@ -1,22 +1,34 @@
-# Podcast Anything Local
+# Podcast Anything
 
-Local-first backend for turning a webpage URL, YouTube URL, or uploaded
-document into:
+Podcast Anything turns source material into a short podcast draft. Give it a
+webpage URL, YouTube URL, pasted text, or an uploaded document, and it will
+produce a rewritten script, an episode title, and synthesized audio.
 
-- a rewritten podcast script
-- a synthesized audio file
-
-The recommended path in this repo is:
+The project is built for local or self-hosted use. The default stack is:
 
 - `OpenAI` for podcast script writing
-- `Piper` for speech synthesis
+- `Piper` for local voice generation
 
-Supported inputs:
+Documents with layout or slide structure go through a multimodal planning path.
+`pdf`, `docx`, and `pptx` inputs are analyzed as page-based documents before the
+final script is written, and `pptx` slide notes are included in that analysis.
 
-- webpage URL
-- YouTube URL
-- pasted text
-- uploaded `.txt`, `.pdf`, `.docx`, or `.pptx`
+## Supported Features
+
+| Capability | Support | Notes |
+| --- | --- | --- |
+| Webpage URL input | Yes | Fetches HTML and extracts article text with `trafilatura` or `bs4` |
+| YouTube URL input | Yes | Uses transcript-based ingestion |
+| Pasted text input | Yes | Direct text-to-podcast path |
+| TXT upload | Yes | Plain text ingestion |
+| PDF upload | Yes | Uses the multimodal document pipeline |
+| DOCX upload | Yes | Extracts text, then normalizes into `normalized.pdf` |
+| PPTX upload | Yes | Extracts slide text and notes, then normalizes into `normalized.pdf` |
+| Podcast modes | `single`, `duo` | Targets about 2-4 minutes of audio |
+| Script writer | OpenAI | Current built-in rewrite provider |
+| Voice generators | Piper, ElevenLabs | Piper is the default local option |
+| Interfaces | Web UI, API, CLI | All use the same local job store |
+| Output artifacts | Yes | `script.txt`, `audio.wav`, `metadata.json`, plus planning artifacts for document jobs |
 
 ## Pipeline Overview
 
@@ -56,62 +68,54 @@ flowchart TD
     S --> T[Write artifacts: script.txt, audio.wav, metadata.json]
 ```
 
-Uploaded `.pdf`, `.docx`, and `.pptx` documents use a shared hierarchical
-multimodal pipeline with OpenAI:
+## Artifacts
 
-- `docx` and `pptx` are normalized into `normalized.pdf`
-- `pptx` slide notes are carried into the chunk-analysis prompts
-- PDF chunk summaries
-- a merged document map
-- a podcast plan
-- then the final podcast script
+Each completed job stores its canonical artifacts under:
 
-## What You Get
+```text
+data/jobs/<job_id>/
+```
 
-Each completed job stores its original artifacts under `data/jobs/<job_id>/`.
-Typical outputs are:
+Typical outputs:
 
 - `source.txt`
-- `metadata.json`
 - `script.txt`
 - `audio.wav`
+- `metadata.json`
 
-OpenAI PDF jobs also write intermediate planning artifacts such as:
+Document jobs can also write intermediate artifacts such as:
 
+- `normalized.pdf`
+- `normalized_page_context.json`
+- `slide_notes.json`
 - `page_index.json`
 - `chunk_001_summary.json`
 - `document_map.json`
 - `podcast_plan.json`
 - `rewrite_input.txt`
 
-If you use the API directly, that is the storage location you work with. If you
-use the CLI, it can also download copies into a separate local folder such as
-`downloads/<job_id>/`.
+If you use the CLI, it can also download copies into a separate folder such as:
+
+```text
+downloads/<job_id>/
+```
 
 ## Quick Start
 
-This path is for a real end-to-end run with OpenAI for script writing and local
-Piper voices for speech synthesis.
-
-### 1. Base setup
+### 1. Create the environment
 
 ```bash
 make setup
 cp .env.example .env
 ```
 
-`.env.example` is already set up for the recommended stack:
-
-- `OpenAI` for script writing
-- `Piper` for TTS
-
-Then add your OpenAI API key to `.env`:
+Then add your OpenAI key to `.env`:
 
 ```bash
 OPENAI_API_KEY=your_key_here
 ```
 
-### 2. Install Piper and download a voice
+### 2. Install Piper and download voices
 
 ```bash
 make setup-piper
@@ -120,7 +124,7 @@ make test-piper-local
 make test-piper-local-duo
 ```
 
-### 3. Start the API and UI
+### 3. Start the app
 
 ```bash
 make run
@@ -132,31 +136,23 @@ Useful local URLs:
 - API docs: `http://127.0.0.1:8000/docs`
 - healthcheck: `http://127.0.0.1:8000/health`
 
-### 4. Run a job from the UI
+### 4. Submit a job
 
-Open `http://127.0.0.1:8000/` and:
+From the UI:
 
-- choose URL, Text, or Upload
+- choose `URL`, `Text`, or `Upload`
 - submit a source
-- watch the job status
-- preview the generated script
-- play or download the generated audio
+- monitor progress
+- preview the script
+- play or download the audio
 
-The UI works against the same local API and the same job storage.
-
-By default, the rewrite step now targets about 2-4 minutes of audio output
-instead of a longer podcast episode.
-
-If you upload a PDF while using `openai`, the job stages include `analyzing`
-and `planning` before the final rewrite.
-
-### 5. Optional: run a job from the CLI and download the outputs
+From the CLI:
 
 ```bash
 make run-job ARGS="https://example.com/article --output-dir ./downloads"
 ```
 
-Or submit a local file:
+Or upload a local file:
 
 ```bash
 make run-job ARGS="--source-file ./brief.txt --output-dir ./downloads"
@@ -164,31 +160,20 @@ make run-job ARGS="--source-file ./brief.txt --output-dir ./downloads"
 
 Expected result:
 
-- the job finishes with `status: completed`
-- canonical artifacts exist under `data/jobs/<job_id>/`
-- the CLI downloads copies under `downloads/<job_id>/`
-- the output folder includes `script.txt` and `audio.wav`
+- the job reaches `status: completed`
+- canonical artifacts are written under `data/jobs/<job_id>/`
+- if you used the CLI without `--no-download`, copies are written under `downloads/<job_id>/`
 
-## Day-To-Day Usage
+## Usage
+
+### Web UI
+
+The built-in UI at `http://127.0.0.1:8000/` is the easiest way to run and
+inspect jobs locally.
 
 ### CLI
 
-The built-in web UI at `http://127.0.0.1:8000/` is the easiest way to use the
-app interactively. The CLI is useful for quick runs and scripting.
-
-Submit a URL, wait for completion, and download artifacts:
-
-```bash
-make run-job ARGS="https://example.com/article --output-dir ./downloads"
-```
-
-Submit a local file:
-
-```bash
-make run-job ARGS="--source-file ./brief.txt --output-dir ./downloads"
-```
-
-Direct module invocation also works:
+Direct module usage also works:
 
 ```bash
 ./.venv/bin/python -m podcast_anything_local.cli \
@@ -206,10 +191,9 @@ Useful CLI flags:
 - `--output-dir ./downloads`
 - `--no-download`
 
-By default, the CLI downloads copies of the completed job files into
-`--output-dir/<job_id>/` such as `downloads/<job_id>/`. If you pass
-`--no-download`, the job still runs, but no copies are downloaded. The original
-job files remain under `data/jobs/<job_id>/`.
+By default, the CLI downloads copies of completed job files into
+`--output-dir/<job_id>/`. If you pass `--no-download`, the job still runs, but
+the canonical artifacts remain only under `data/jobs/<job_id>/`.
 
 ### API
 
@@ -258,7 +242,7 @@ curl -L http://127.0.0.1:8000/jobs/<job_id>/artifacts/script.txt -o script.txt
 
 The app loads `.env` automatically on startup.
 
-The recommended configuration is:
+Recommended configuration:
 
 ```bash
 WEB_EXTRACTOR=auto
@@ -276,51 +260,34 @@ PIPER_SPEAKER_ID=
 PIPER_SPEAKER_ID_B=
 ```
 
-In this recommended setup, single-host podcasts default to `ryan-high`. For
-duo mode, `HOST_A` uses `lessac-high` and `HOST_B` uses `ryan-high`.
+In this setup:
 
-For long PDFs where layout, figures, and page visuals matter, a stronger OpenAI
-model such as `gpt-4.1` is usually a better choice than `gpt-4o-mini`.
+- single-host podcasts default to `ryan-high`
+- duo mode uses `lessac-high` for `HOST_A` and `ryan-high` for `HOST_B`
 
-Most important settings:
+Important settings:
 
 - `WEB_EXTRACTOR`
-- `TTS_PROVIDER`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
+- `TTS_PROVIDER`
 - `PIPER_MODEL_PATH`
 - `PIPER_CONFIG_PATH`
 - `DATA_DIR`
 
-If you want hosted TTS instead of local Piper:
+Notes:
 
-- set `TTS_PROVIDER=elevenlabs` and fill in `ELEVENLABS_API_KEY`
+- `WEB_EXTRACTOR=auto` tries `trafilatura` first and falls back to `bs4`
+- `WEB_EXTRACTOR=trafilatura` forces `trafilatura`
+- `WEB_EXTRACTOR=bs4` forces the simpler BeautifulSoup extractor
+- for long PDFs with figures, layout, and page visuals, `gpt-4.1` is usually a
+  stronger choice than `gpt-4o-mini`
+- if you want hosted TTS instead of local Piper, set `TTS_PROVIDER=elevenlabs`
+  and fill in `ELEVENLABS_API_KEY`
 
 OpenAI is the only built-in podcast script writer in this repo. The rewrite
 provider boundary is still isolated in code so future providers such as Grok or
-Claude can be added later without reworking the rest of the pipeline.
-
-## Notes
-
-- `WEB_EXTRACTOR=auto` tries `trafilatura` first and falls back to `bs4`
-- `WEB_EXTRACTOR=trafilatura` forces article extraction through `trafilatura`
-- `WEB_EXTRACTOR=bs4` forces the simpler BeautifulSoup paragraph extractor
-- uploaded `.pdf`, `.docx`, and `.pptx` files use the hierarchical multimodal
-  OpenAI path
-- `docx` and `pptx` are normalized into `normalized.pdf` before page-chunk
-  analysis
-- `pptx` slide notes are saved as `slide_notes.json` and included in the
-  chunk-analysis prompts
-- PDFs without extractable embedded text can still work through the multimodal
-  OpenAI path
-- rewritten scripts are targeted to about 2-4 minutes of spoken audio and are
-  capped to an approximate spoken-word budget before TTS
-- `make test-piper-local` writes a sample WAV through the project provider
-- `make test-piper-local-duo` writes a two-host WAV using `PIPER_MODEL_PATH` for
-  `HOST_A` and `PIPER_MODEL_PATH_B` for `HOST_B`
-- for file uploads, send `multipart/form-data`
-- for URL submissions, use JSON or form data, but provide exactly one of
-  `source_url`, `source_text`, or `source_file`
+Claude can be added later without redesigning the rest of the pipeline.
 
 ## Development
 
@@ -335,15 +302,15 @@ make test
 This repo includes two GitHub Actions workflows:
 
 - `CI`
-  Runs on every pull request and on pushes to `main`. It installs the project,
-  compiles `src/`, `tests/`, and `scripts/`, and runs the full pytest suite on
-  Python `3.11` and `3.13`.
+  Runs on every pull request and on pushes to `main`. It compiles `src/`,
+  `tests/`, and `scripts/`, then runs the full pytest suite on Python `3.11`
+  and `3.13`.
 - `Integration Hosted`
   Runs on `workflow_dispatch` and nightly. It runs a real OpenAI rewrite smoke
   test and a real Piper smoke test. To enable the OpenAI job, add the
   `OPENAI_API_KEY` GitHub Actions secret to the repository.
 
-If you want to mirror the required CI locally, run:
+If you want to mirror the required CI locally:
 
 ```bash
 make test-ci
