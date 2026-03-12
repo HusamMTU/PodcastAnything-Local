@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: setup setup-piper setup-ollama start-ollama-mac download-piper-voice download-piper-duo-voices pull-ollama-model test-piper-local test-piper-local-duo test-ollama-local run run-job test
+.PHONY: setup setup-piper setup-ollama start-ollama-mac download-piper-voice download-piper-duo-voices pull-ollama-model test-piper-local test-piper-local-duo test-ollama-local test-openai-live run run-job test test-ci
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -33,6 +33,9 @@ test-piper-local-duo:
 test-ollama-local:
 	./.venv/bin/python scripts/test_ollama_local.py --pull-if-missing $(if $(MODEL),--model $(MODEL),)
 
+test-openai-live:
+	./.venv/bin/python scripts/test_openai_live.py $(if $(MODEL),--model $(MODEL),)
+
 run:
 	./.venv/bin/uvicorn podcast_anything_local.main:app --reload
 
@@ -40,4 +43,8 @@ run-job:
 	./.venv/bin/python -m podcast_anything_local.cli $(ARGS)
 
 test:
+	./.venv/bin/pytest
+
+test-ci:
+	./.venv/bin/python -m compileall src tests scripts
 	./.venv/bin/pytest

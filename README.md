@@ -6,9 +6,9 @@ document into:
 - a rewritten podcast script
 - a synthesized audio file
 
-The recommended path in this repo is a real local run with:
+The recommended path in this repo is:
 
-- `ollama` for script rewriting
+- `openai` for script rewriting
 - `piper` for speech synthesis
 
 Supported inputs:
@@ -33,8 +33,8 @@ use the CLI, it can also download copies into a separate local folder such as
 
 ## Quick Start
 
-This path is for a real local end-to-end run with local models and real output
-files.
+This path is for a real end-to-end run with OpenAI for script writing and local
+Piper voices for speech synthesis.
 
 ### 1. Base setup
 
@@ -43,10 +43,16 @@ make setup
 cp .env.example .env
 ```
 
-`.env.example` is already set up for the recommended local stack:
+`.env.example` is already set up for the recommended stack:
 
-- `REWRITE_PROVIDER=ollama`
+- `REWRITE_PROVIDER=openai`
 - `TTS_PROVIDER=piper`
+
+Then add your OpenAI API key to `.env`:
+
+```bash
+OPENAI_API_KEY=your_key_here
+```
 
 ### 2. Install Piper and download a voice
 
@@ -57,21 +63,7 @@ make test-piper-local
 make test-piper-local-duo
 ```
 
-### 3. Start Ollama and pull a model
-
-On macOS in this workspace:
-
-```bash
-make start-ollama-mac
-make setup-ollama MODEL=gemma3:4b
-make pull-ollama-model MODEL=gemma3:4b
-make test-ollama-local MODEL=gemma3:4b
-```
-
-If you are not on macOS, start Ollama using the normal method for your platform
-and keep `OLLAMA_BASE_URL` pointed at the running local API.
-
-### 4. Start the API and UI
+### 3. Start the API and UI
 
 ```bash
 make run
@@ -83,14 +75,14 @@ Useful local URLs:
 - API docs: `http://127.0.0.1:8000/docs`
 - healthcheck: `http://127.0.0.1:8000/health`
 
-### 5. Run a job from the UI
+### 4. Run a job from the UI
 
 Open `http://127.0.0.1:8000/` and:
 
 - choose URL or Upload
 - submit a source
 - watch the job status
-- see the rewrite stream live in the script preview for Ollama-backed jobs
+- if you switch a job to `ollama`, the script preview can stream live during rewrite
 - preview the generated script
 - play or download the generated audio
 
@@ -99,7 +91,7 @@ The UI works against the same local API and the same job storage.
 By default, the rewrite step now targets about 2-4 minutes of audio output
 instead of a longer podcast episode.
 
-### 6. Optional: run a job from the CLI and download the outputs
+### 5. Optional: run a job from the CLI and download the outputs
 
 ```bash
 make run-job ARGS="https://example.com/article --output-dir ./downloads"
@@ -208,14 +200,14 @@ curl -L http://127.0.0.1:8000/jobs/<job_id>/artifacts/script.txt -o script.txt
 
 The app loads `.env` automatically on startup.
 
-The recommended local configuration is:
+The recommended configuration is:
 
 ```bash
 WEB_EXTRACTOR=auto
-REWRITE_PROVIDER=ollama
-OLLAMA_BASE_URL=http://localhost:11434/api
-OLLAMA_MODEL=gemma3:4b
-OLLAMA_GENERATE_TIMEOUT_SECONDS=600
+REWRITE_PROVIDER=openai
+OPENAI_BASE_URL=https://api.openai.com/v1
+OPENAI_API_KEY=
+OPENAI_MODEL=gpt-4o-mini
 
 TTS_PROVIDER=piper
 PIPER_MODEL_PATH=./data/piper_voices/en_US-lessac-high.onnx
@@ -229,35 +221,44 @@ PIPER_SPEAKER_ID_B=
 In this recommended duo setup, `HOST_A` uses `lessac-high` and `HOST_B` uses
 `ryan-high`.
 
+If you want local rewrite instead of OpenAI, switch to:
+
+```bash
+REWRITE_PROVIDER=ollama
+OLLAMA_BASE_URL=http://localhost:11434/api
+OLLAMA_MODEL=gemma3:4b
+OLLAMA_GENERATE_TIMEOUT_SECONDS=600
+```
+
 Most important settings:
 
 - `WEB_EXTRACTOR`
 - `REWRITE_PROVIDER`
 - `TTS_PROVIDER`
-- `OLLAMA_BASE_URL`
-- `OLLAMA_MODEL`
-- `OLLAMA_GENERATE_TIMEOUT_SECONDS`
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL`
 - `PIPER_MODEL_PATH`
 - `PIPER_CONFIG_PATH`
 - `DATA_DIR`
 
-If you want hosted providers instead of local ones:
+If you want hosted TTS instead of local Piper:
 
-- set `REWRITE_PROVIDER=openai` and fill in `OPENAI_API_KEY`
 - set `TTS_PROVIDER=elevenlabs` and fill in `ELEVENLABS_API_KEY`
 
-If you are using a local rewrite model on a limited machine such as a laptop or
-a small server, it is generally recommended to stay at or under roughly `9B`
-parameters. Larger local models can become too slow or unreliable for this
-workflow. If you need more capable rewriting than a local `<= 9B` model can
-deliver, especially for `duo` mode, `REWRITE_PROVIDER=openai` is the
-recommended path.
+`REWRITE_PROVIDER=openai` is the default and recommended rewrite path in this
+repo. If you are using a local rewrite model on a limited machine such as a
+laptop or a small server, it is generally recommended to stay at or under
+roughly `9B` parameters. Larger local models can become too slow or unreliable
+for this workflow. If you want local rewrite, treat `ollama` as an optional
+alternative rather than the default.
 
 ## Notes
 
 - `WEB_EXTRACTOR=auto` tries `trafilatura` first and falls back to `bs4`
 - `WEB_EXTRACTOR=trafilatura` forces article extraction through `trafilatura`
 - `WEB_EXTRACTOR=bs4` forces the simpler BeautifulSoup paragraph extractor
+- for OpenAI rewrite jobs, the UI shows job status and the final script when it
+  is ready
 - for Ollama rewrite jobs, the built-in UI opens a live SSE stream so the
   script preview updates while the rewrite is still generating
 - `make setup-ollama` checks whether the local Ollama API is reachable and
@@ -281,6 +282,30 @@ Run the test suite:
 
 ```bash
 make test
+```
+
+## CI
+
+This repo includes three GitHub Actions workflows:
+
+- `CI`
+  Runs on every pull request and on pushes to `main`. It installs the project,
+  compiles `src/`, `tests/`, and `scripts/`, and runs the full pytest suite on
+  Python `3.11` and `3.13`.
+- `Integration Hosted`
+  Runs on `workflow_dispatch` and nightly. It runs a real OpenAI rewrite smoke
+  test and a real Piper smoke test. To enable the OpenAI job, add the
+  `OPENAI_API_KEY` GitHub Actions secret to the repository.
+- `Integration Local Models`
+  Runs on `workflow_dispatch` only. It is meant for a self-hosted runner with
+  a custom `ollama` label and a working local Ollama service. It runs a real
+  Ollama rewrite smoke test plus a real Piper smoke test and uploads both
+  artifacts.
+
+If you want to mirror the required CI locally, run:
+
+```bash
+make test-ci
 ```
 
 Verified locally:

@@ -83,7 +83,7 @@ def load_settings() -> Settings:
     database_path = database_path.resolve()
     jobs_dir = Path(_read_env("JOBS_DIR", str(data_dir / "jobs"))).expanduser().resolve()
 
-    rewrite_provider = _read_env("REWRITE_PROVIDER", "demo").lower()
+    rewrite_provider = _read_env("REWRITE_PROVIDER", "openai").lower()
     if rewrite_provider not in {"demo", "ollama", "openai"}:
         raise ConfigError("REWRITE_PROVIDER must be one of: demo, ollama, openai")
 
