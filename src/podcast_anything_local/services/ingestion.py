@@ -54,6 +54,7 @@ class IngestionService:
     def ingest(
         self,
         *,
+        source_kind: str | None = None,
         source_url: str | None = None,
         source_file_path: str | None = None,
         source_file_name: str | None = None,
@@ -75,6 +76,11 @@ class IngestionService:
         file_path = Path(source_file_path)
         if not file_path.is_file():
             raise IngestionServiceError(f"Uploaded file not found: {source_file_path}")
+        if source_kind == "text":
+            text = _extract_txt_text(file_path.read_bytes())
+            if not text:
+                raise IngestionServiceError("No readable text found in pasted text input.")
+            return text, {"source_type": "text", "source_char_count": len(text)}
         text, source_type = _extract_document_text(
             file_bytes=file_path.read_bytes(),
             filename=source_file_name or file_path.name,

@@ -14,6 +14,7 @@
   --radius-lg: 28px;
   --radius-md: 18px;
   --radius-sm: 12px;
+  --content-width: 76rem;
 }
 
 * {
@@ -37,7 +38,8 @@ body {
 
 button,
 input,
-select {
+select,
+textarea {
   font: inherit;
 }
 
@@ -65,8 +67,10 @@ pre {
   display: grid;
   gap: 1.5rem;
   grid-template-columns: 1.7fr 1fr;
+  width: 100%;
+  max-width: var(--content-width);
+  margin: 0 auto 1.25rem;
   padding: 1.5rem;
-  margin-bottom: 1.25rem;
   overflow: hidden;
   position: relative;
 }
@@ -149,9 +153,12 @@ dt {
 
 .main-grid {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(360px, 1.1fr);
+  grid-template-columns: 1fr;
   gap: 1.25rem;
   align-items: start;
+  width: 100%;
+  max-width: var(--content-width);
+  margin: 0 auto;
 }
 
 .form-panel,
@@ -161,6 +168,10 @@ dt {
 }
 
 .recent-panel {
+  width: 100%;
+  max-width: var(--content-width);
+  margin-left: auto;
+  margin-right: auto;
   margin-top: 1.25rem;
 }
 
@@ -170,7 +181,9 @@ dt {
 
 .job-form {
   display: grid;
-  gap: 1rem;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem 1rem;
+  align-items: end;
 }
 
 .mode-switch {
@@ -208,6 +221,15 @@ dt {
   gap: 1rem;
 }
 
+.field-grid-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.85rem 1rem;
+}
+
+.form-span-full {
+  grid-column: 1 / -1;
+}
+
 .input-group {
   display: grid;
   gap: 0.45rem;
@@ -223,7 +245,8 @@ label {
 }
 
 input,
-select {
+select,
+textarea {
   width: 100%;
   border: 1px solid rgba(74, 53, 37, 0.2);
   border-radius: var(--radius-sm);
@@ -234,10 +257,16 @@ select {
 
 input:focus,
 select:focus,
+textarea:focus,
 button:focus-visible,
 a:focus-visible {
   outline: 2px solid rgba(200, 90, 33, 0.35);
   outline-offset: 2px;
+}
+
+.source-textarea {
+  min-height: 8rem;
+  resize: vertical;
 }
 
 .form-actions,
@@ -368,6 +397,40 @@ dd {
   background: rgba(255, 255, 255, 0.52);
 }
 
+.artifact-card-collapsible {
+  padding: 0;
+  overflow: hidden;
+}
+
+.artifact-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 1rem;
+  cursor: pointer;
+  list-style: none;
+}
+
+.artifact-summary::-webkit-details-marker {
+  display: none;
+}
+
+.artifact-summary::after {
+  content: "▾";
+  color: var(--accent-dark);
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.artifact-card-collapsible:not([open]) .artifact-summary::after {
+  content: "▸";
+}
+
+.artifact-card-collapsible[open] .artifact-summary {
+  border-bottom: 1px solid var(--line);
+}
+
 .artifact-preview {
   height: 22rem;
   margin: 0.75rem 0 0;
@@ -408,8 +471,8 @@ dd {
 .artifact-list {
   display: grid;
   gap: 0.65rem;
-  margin: 0.9rem 0 0;
-  padding: 0;
+  margin: 0;
+  padding: 1rem;
   list-style: none;
 }
 
@@ -443,6 +506,11 @@ dd {
 .recent-jobs {
   display: grid;
   gap: 0.75rem;
+  max-height: min(30rem, 60vh);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 0.25rem;
+  scrollbar-gutter: stable;
 }
 
 .job-pick {
@@ -498,8 +566,12 @@ dd {
 
 @media (max-width: 1040px) {
   .hero,
-  .main-grid,
   .artifact-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .job-form,
+  .field-grid-compact {
     grid-template-columns: 1fr;
   }
 }
@@ -521,6 +593,10 @@ dd {
   .field-grid,
   .job-meta {
     grid-template-columns: 1fr;
+  }
+
+  .recent-jobs {
+    max-height: min(20rem, 45vh);
   }
 
   .form-actions,

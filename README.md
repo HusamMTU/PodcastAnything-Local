@@ -15,6 +15,7 @@ Supported inputs:
 
 - webpage URL
 - YouTube URL
+- pasted text
 - uploaded `.txt`, `.pdf`, or `.docx`
 
 ## What You Get
@@ -79,7 +80,7 @@ Useful local URLs:
 
 Open `http://127.0.0.1:8000/` and:
 
-- choose URL or Upload
+- choose URL, Text, or Upload
 - submit a source
 - watch the job status
 - if you switch a job to `ollama`, the script preview can stream live during rewrite

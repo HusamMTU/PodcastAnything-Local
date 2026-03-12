@@ -30,17 +30,17 @@
       <main class="main-grid">
         <section class="panel form-panel">
           <div class="section-heading">
-            <p class="eyebrow">New Job</p>
             <h2>Submit a source</h2>
           </div>
 
           <form id="job-form" class="job-form">
-            <div class="mode-switch" role="tablist" aria-label="Source type">
+            <div class="mode-switch form-span-full" role="tablist" aria-label="Source type">
               <button type="button" class="mode-button is-active" data-source-mode="url">URL</button>
+              <button type="button" class="mode-button" data-source-mode="text">Text</button>
               <button type="button" class="mode-button" data-source-mode="file">Upload</button>
             </div>
 
-            <div id="url-fields" class="input-group">
+            <div id="url-fields" class="input-group form-span-full">
               <label for="source-url">Source URL</label>
               <input
                 id="source-url"
@@ -51,36 +51,46 @@
               <p class="hint">Use this for webpages or YouTube links.</p>
             </div>
 
-            <div id="file-fields" class="input-group is-hidden">
+            <div id="file-fields" class="input-group form-span-full is-hidden">
               <label for="source-file">Upload a document</label>
               <input id="source-file" name="source_file" type="file" accept=".txt,.pdf,.docx" />
               <p class="hint">Accepted: .txt, .pdf, .docx</p>
             </div>
 
-            <div class="input-group">
-              <label for="script-mode">Podcast mode</label>
-              <select id="script-mode" name="script_mode">
-                <option value="single">Single host</option>
-                <option value="duo">Two hosts</option>
-              </select>
+            <div id="text-fields" class="input-group form-span-full is-hidden">
+              <label for="source-text">Paste source text</label>
+              <textarea
+                id="source-text"
+                name="source_text"
+                class="source-textarea"
+                placeholder="Paste article text, notes, or a script to turn into audio."
+              ></textarea>
+              <p class="hint">Use this when you already have the text and do not need URL fetching or file upload.</p>
             </div>
 
-            <div class="field-grid">
+            <div class="field-grid field-grid-compact form-span-full">
               <div class="input-group">
-                <label for="rewrite-provider">Rewrite provider override</label>
+                <label for="script-mode">Podcast mode</label>
+                <select id="script-mode" name="script_mode">
+                  <option value="single">Single host</option>
+                  <option value="duo">Two hosts</option>
+                </select>
+              </div>
+              <div class="input-group">
+                <label for="rewrite-provider">Podcast script writer</label>
                 <select id="rewrite-provider" name="rewrite_provider">
                   <option value="">Use app default</option>
                 </select>
               </div>
               <div class="input-group">
-                <label for="tts-provider">TTS provider override</label>
+                <label for="tts-provider">Podcast voice generator</label>
                 <select id="tts-provider" name="tts_provider">
                   <option value="">Use app default</option>
                 </select>
               </div>
             </div>
 
-            <div class="form-actions">
+            <div class="form-actions form-span-full">
               <button id="submit-button" class="primary-button" type="submit">Start job</button>
               <p id="form-message" class="form-message" aria-live="polite"></p>
             </div>
@@ -89,8 +99,7 @@
 
         <section class="panel job-panel">
           <div class="section-heading">
-            <p class="eyebrow">Current Job</p>
-            <h2>Track progress and inspect results</h2>
+            <h2>Progress and results</h2>
           </div>
 
           <div id="job-empty" class="empty-state">
@@ -159,12 +168,12 @@
               </section>
             </div>
 
-            <section class="artifact-card">
-              <div class="artifact-header">
+            <details class="artifact-card artifact-card-collapsible">
+              <summary class="artifact-summary">
                 <h3>Artifacts</h3>
-              </div>
+              </summary>
               <ul id="artifact-list" class="artifact-list"></ul>
-            </section>
+            </details>
           </div>
         </section>
       </main>

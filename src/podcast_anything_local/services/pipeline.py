@@ -35,6 +35,7 @@ class PipelineService:
         try:
             job = self._repository.mark_running(job_id, stage=stage)
             source_text, ingestion_metadata = self._ingestion_service.ingest(
+                source_kind=job.source_kind,
                 source_url=job.source_url,
                 source_file_path=job.source_file_path,
                 source_file_name=job.source_file_name,
