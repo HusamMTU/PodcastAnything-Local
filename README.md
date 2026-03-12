@@ -18,6 +18,44 @@ Supported inputs:
 - pasted text
 - uploaded `.txt`, `.pdf`, `.docx`, or `.pptx`
 
+## Pipeline Overview
+
+```mermaid
+flowchart TD
+    A[Input source] --> B{Source type}
+
+    B -->|Webpage URL| C[Fetch HTML and extract article text]
+    B -->|YouTube URL| D[Fetch transcript]
+    B -->|Pasted text| E[Use submitted text directly]
+    B -->|TXT upload| F[Extract plain text]
+    B -->|PDF upload| G[Use original PDF for multimodal analysis]
+    B -->|DOCX upload| H[Extract text and normalize to normalized.pdf]
+    B -->|PPTX upload| I[Extract slide text and notes, then normalize to normalized.pdf]
+
+    C --> J[Prepare rewrite input]
+    D --> J
+    E --> J
+    F --> J
+
+    G --> K[Chunk PDF pages]
+    H --> K
+    I --> L[Carry slide notes into chunk prompts]
+    I --> K
+
+    K --> M[OpenAI multimodal chunk summaries]
+    L --> M
+    M --> N[Build document map]
+    N --> O[Build podcast plan]
+    O --> P[Build rewrite_input.txt]
+
+    J --> Q[OpenAI script rewrite]
+    P --> Q
+
+    Q --> R[Generate episode title]
+    R --> S[TTS synthesis]
+    S --> T[Write artifacts: script.txt, audio.wav, metadata.json]
+```
+
 Uploaded `.pdf`, `.docx`, and `.pptx` documents use a shared hierarchical
 multimodal pipeline with OpenAI:
 
