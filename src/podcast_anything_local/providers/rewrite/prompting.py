@@ -111,8 +111,15 @@ def build_pdf_chunk_summary_prompt(
     page_start: int,
     page_end: int,
     script_mode: str,
+    supplemental_text: str | None = None,
 ) -> str:
     title_line = f"Document title: {title}\n" if title else ""
+    supplemental_section = ""
+    if supplemental_text and supplemental_text.strip():
+        supplemental_section = (
+            "\n\nSupplemental extracted text for these pages:\n"
+            f"{supplemental_text.strip()}"
+        )
     return (
         "You are analyzing one chunk of a longer source document for a podcast adaptation. "
         "Review the PDF pages carefully, including both text and visuals. Return JSON only.\n\n"
@@ -122,6 +129,7 @@ def build_pdf_chunk_summary_prompt(
         f"Podcast mode: {script_mode}\n\n"
         "Focus on the material that matters for a short podcast episode. Capture the key ideas, "
         "important facts, meaningful visuals, and the best angles for spoken explanation."
+        f"{supplemental_section}"
     )
 
 

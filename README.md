@@ -18,8 +18,11 @@ Supported inputs:
 - pasted text
 - uploaded `.txt`, `.pdf`, `.docx`, or `.pptx`
 
-Uploaded PDFs use a hierarchical multimodal pipeline with OpenAI:
+Uploaded `.pdf`, `.docx`, and `.pptx` documents use a shared hierarchical
+multimodal pipeline with OpenAI:
 
+- `docx` and `pptx` are normalized into `normalized.pdf`
+- `pptx` slide notes are carried into the chunk-analysis prompts
 - PDF chunk summaries
 - a merged document map
 - a podcast plan
@@ -264,7 +267,12 @@ Claude can be added later without reworking the rest of the pipeline.
 - `WEB_EXTRACTOR=auto` tries `trafilatura` first and falls back to `bs4`
 - `WEB_EXTRACTOR=trafilatura` forces article extraction through `trafilatura`
 - `WEB_EXTRACTOR=bs4` forces the simpler BeautifulSoup paragraph extractor
-- uploaded PDFs use a hierarchical multimodal OpenAI path
+- uploaded `.pdf`, `.docx`, and `.pptx` files use the hierarchical multimodal
+  OpenAI path
+- `docx` and `pptx` are normalized into `normalized.pdf` before page-chunk
+  analysis
+- `pptx` slide notes are saved as `slide_notes.json` and included in the
+  chunk-analysis prompts
 - PDFs without extractable embedded text can still work through the multimodal
   OpenAI path
 - rewritten scripts are targeted to about 2-4 minutes of spoken audio and are

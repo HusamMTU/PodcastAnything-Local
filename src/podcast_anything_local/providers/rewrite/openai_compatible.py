@@ -78,6 +78,7 @@ class OpenAICompatibleRewriteProvider:
         page_start: int,
         page_end: int,
         script_mode: str,
+        supplemental_text: str | None = None,
     ) -> dict[str, object]:
         prompt = build_pdf_chunk_summary_prompt(
             title=title,
@@ -86,6 +87,7 @@ class OpenAICompatibleRewriteProvider:
             page_start=page_start,
             page_end=page_end,
             script_mode=script_mode,
+            supplemental_text=supplemental_text,
         )
         return self._complete_json_response(
             prompt=prompt,
