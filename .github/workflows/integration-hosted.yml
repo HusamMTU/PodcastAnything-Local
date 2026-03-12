@@ -15,35 +15,43 @@ concurrency:
 jobs:
   openai-smoke:
     name: OpenAI Smoke Test
-    if: ${{ secrets.OPENAI_API_KEY != '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    env:
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
 
     steps:
       - name: Check out repo
         uses: actions/checkout@v4
 
       - name: Set up Python
+        if: ${{ env.OPENAI_API_KEY != '' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.13"
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      - name: Skip OpenAI smoke test when secret is missing
+        if: ${{ env.OPENAI_API_KEY == '' }}
+        run: echo "OPENAI_API_KEY secret is not configured; skipping OpenAI smoke test."
+
       - name: Install dependencies
+        if: ${{ env.OPENAI_API_KEY != '' }}
         run: |
           python -m pip install --upgrade pip
           python -m pip install -e ".[dev]"
 
       - name: Run OpenAI smoke test
+        if: ${{ env.OPENAI_API_KEY != '' }}
         env:
           REWRITE_PROVIDER: openai
           OPENAI_BASE_URL: https://api.openai.com/v1
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_MODEL: gpt-4o-mini
         run: python scripts/test_openai_live.py --output data/openai_rewrite_ci.txt
 
       - name: Upload OpenAI smoke artifact
+        if: ${{ env.OPENAI_API_KEY != '' }}
         uses: actions/upload-artifact@v4
         with:
           name: openai-rewrite-smoke
