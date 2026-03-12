@@ -184,6 +184,8 @@ def _extract_document_text(file_bytes: bytes, filename: str) -> tuple[str, str]:
         text = _extract_pptx_text(file_bytes)
     else:
         text = _extract_txt_text(file_bytes)
+    if document_type == "pdf":
+        return text, document_type
     if not text:
         raise IngestionServiceError(f"No readable text found in uploaded {document_type}.")
     return text, document_type

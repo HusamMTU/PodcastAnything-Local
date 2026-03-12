@@ -38,7 +38,7 @@ class LocalArtifactStore:
 
     def write_text(self, job_id: str, filename: str, text: str) -> str:
         path = self.ensure_job_dir(job_id) / filename
-        path.write_text(text, encoding="utf-8")
+        path.write_text(_sanitize_text_for_utf8(text), encoding="utf-8")
         return str(path)
 
     def write_bytes(self, job_id: str, filename: str, data: bytes) -> str:
@@ -96,3 +96,15 @@ class LocalArtifactStore:
                 )
             )
         return artifacts
+
+
+def _sanitize_text_for_utf8(text: str) -> str:
+    return "".join(
+        character if not _is_surrogate_codepoint(character) else "\uFFFD"
+        for character in text
+    )
+
+
+def _is_surrogate_codepoint(character: str) -> bool:
+    codepoint = ord(character)
+    return 0xD800 <= codepoint <= 0xDFFF

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from podcast_anything_local.providers.rewrite.base import RewriteProviderError
 
 ESTIMATED_SPOKEN_WPM = 120
@@ -99,3 +101,59 @@ def clean_generated_title(raw_title: str) -> str:
     if len(cleaned) > 120:
         cleaned = cleaned[:117].rstrip() + "..."
     return cleaned
+
+
+def build_pdf_chunk_summary_prompt(
+    *,
+    title: str | None,
+    chunk_index: int,
+    chunk_count: int,
+    page_start: int,
+    page_end: int,
+    script_mode: str,
+) -> str:
+    title_line = f"Document title: {title}\n" if title else ""
+    return (
+        "You are analyzing one chunk of a longer source document for a podcast adaptation. "
+        "Review the PDF pages carefully, including both text and visuals. Return JSON only.\n\n"
+        f"{title_line}"
+        f"Chunk: {chunk_index} of {chunk_count}\n"
+        f"Pages: {page_start}-{page_end}\n"
+        f"Podcast mode: {script_mode}\n\n"
+        "Focus on the material that matters for a short podcast episode. Capture the key ideas, "
+        "important facts, meaningful visuals, and the best angles for spoken explanation."
+    )
+
+
+def build_document_map_prompt(
+    *,
+    chunk_summaries: list[dict[str, object]],
+    title: str | None,
+    script_mode: str,
+) -> str:
+    title_line = f"Document title: {title}\n" if title else ""
+    return (
+        "You are combining chunk-level document summaries into one structured document map for a "
+        "podcast adaptation. Return JSON only.\n\n"
+        f"{title_line}"
+        f"Podcast mode: {script_mode}\n\n"
+        "Chunk summaries JSON:\n"
+        f"{json.dumps(chunk_summaries, ensure_ascii=True, indent=2)}"
+    )
+
+
+def build_podcast_plan_prompt(
+    *,
+    document_map: dict[str, object],
+    title: str | None,
+    script_mode: str,
+) -> str:
+    title_line = f"Document title: {title}\n" if title else ""
+    return (
+        "You are planning a 2-4 minute podcast episode based on a structured document map. "
+        "Return JSON only.\n\n"
+        f"{title_line}"
+        f"Podcast mode: {script_mode}\n\n"
+        "Document map JSON:\n"
+        f"{json.dumps(document_map, ensure_ascii=True, indent=2)}"
+    )

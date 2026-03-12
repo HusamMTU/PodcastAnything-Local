@@ -18,6 +18,13 @@ Supported inputs:
 - pasted text
 - uploaded `.txt`, `.pdf`, `.docx`, or `.pptx`
 
+Uploaded PDFs use a hierarchical multimodal pipeline when `REWRITE_PROVIDER=openai`:
+
+- PDF chunk summaries
+- a merged document map
+- a podcast plan
+- then the final podcast script
+
 ## What You Get
 
 Each completed job stores its original artifacts under `data/jobs/<job_id>/`.
@@ -27,6 +34,14 @@ Typical outputs are:
 - `metadata.json`
 - `script.txt`
 - `audio.wav`
+
+OpenAI PDF jobs also write intermediate planning artifacts such as:
+
+- `page_index.json`
+- `chunk_001_summary.json`
+- `document_map.json`
+- `podcast_plan.json`
+- `rewrite_input.txt`
 
 If you use the API directly, that is the storage location you work with. If you
 use the CLI, it can also download copies into a separate local folder such as
@@ -91,6 +106,9 @@ The UI works against the same local API and the same job storage.
 
 By default, the rewrite step now targets about 2-4 minutes of audio output
 instead of a longer podcast episode.
+
+If you upload a PDF while using `openai`, the job stages include `analyzing`
+and `planning` before the final rewrite.
 
 ### 5. Optional: run a job from the CLI and download the outputs
 
@@ -223,6 +241,9 @@ PIPER_SPEAKER_ID_B=
 In this recommended setup, single-host podcasts default to `ryan-high`. For
 duo mode, `HOST_A` uses `lessac-high` and `HOST_B` uses `ryan-high`.
 
+For long PDFs where layout, figures, and page visuals matter, a stronger OpenAI
+model such as `gpt-4.1` is usually a better choice than `gpt-4o-mini`.
+
 If you want local rewrite instead of OpenAI, switch to:
 
 ```bash
@@ -259,6 +280,12 @@ alternative rather than the default.
 - `WEB_EXTRACTOR=auto` tries `trafilatura` first and falls back to `bs4`
 - `WEB_EXTRACTOR=trafilatura` forces article extraction through `trafilatura`
 - `WEB_EXTRACTOR=bs4` forces the simpler BeautifulSoup paragraph extractor
+- uploaded PDFs use a hierarchical multimodal OpenAI path only when
+  `REWRITE_PROVIDER=openai`
+- PDFs without extractable embedded text can still work through the multimodal
+  OpenAI path
+- PDFs without extractable embedded text will fail with non-OpenAI rewrite
+  providers
 - for OpenAI rewrite jobs, the UI shows job status and the final script when it
   is ready
 - for Ollama rewrite jobs, the built-in UI opens a live SSE stream so the
@@ -276,7 +303,7 @@ alternative rather than the default.
   `HOST_A` and `PIPER_MODEL_PATH_B` for `HOST_B`
 - for file uploads, send `multipart/form-data`
 - for URL submissions, use JSON or form data, but provide exactly one of
-  `source_url` or `source_file`
+  `source_url`, `source_text`, or `source_file`
 
 ## Development
 

@@ -12,6 +12,7 @@ from podcast_anything_local.jobs.events import JobEventBroker
 from podcast_anything_local.db.repository import JobRepository
 from podcast_anything_local.jobs.executor import JobExecutor
 from podcast_anything_local.services.audio import AudioService
+from podcast_anything_local.services.document_pipeline import MultimodalDocumentService
 from podcast_anything_local.services.ingestion import IngestionService
 from podcast_anything_local.services.pipeline import PipelineService
 from podcast_anything_local.services.rewrite import RewriteService
@@ -30,6 +31,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         artifact_store = LocalArtifactStore(resolved_settings.jobs_dir)
         ingestion_service = IngestionService(web_extractor=resolved_settings.web_extractor)
         rewrite_service = RewriteService(resolved_settings)
+        document_service = MultimodalDocumentService(resolved_settings)
         audio_service = AudioService(resolved_settings)
         job_event_broker = JobEventBroker()
         pipeline_service = PipelineService(
@@ -37,6 +39,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             artifact_store=artifact_store,
             ingestion_service=ingestion_service,
             rewrite_service=rewrite_service,
+            document_service=document_service,
             audio_service=audio_service,
             job_event_broker=job_event_broker,
         )

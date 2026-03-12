@@ -217,6 +217,14 @@ class JobRepository:
                 "source_type",
                 "title_generation_error",
                 "title_source",
+                "multimodal_document_pipeline",
+                "multimodal_document_page_count",
+                "multimodal_document_chunk_count",
+                "multimodal_document_chunk_pages",
+                "multimodal_document_chunk_overlap_pages",
+                "rewrite_input_char_count",
+                "rewrite_input_truncated",
+                "rewrite_input_artifact",
             }
         }
         metadata["retry_count"] = retry_count

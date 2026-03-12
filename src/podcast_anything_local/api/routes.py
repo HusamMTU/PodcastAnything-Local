@@ -181,15 +181,10 @@ def retry_job(job_id: str, request: Request) -> JobResponse:
     executor = request.app.state.executor
     try:
         existing = repository.get_job(job_id)
-        for artifact_path in {
-            existing.source_artifact,
-            existing.script_artifact,
-            existing.audio_artifact,
-            existing.metadata.get("metadata_artifact"),
-        }:
-            if not artifact_path or artifact_path == existing.source_file_path:
+        for artifact in artifact_store.list_artifacts(job_id):
+            if existing.source_file_path and artifact.absolute_path == existing.source_file_path:
                 continue
-            artifact_store.delete_artifact(artifact_path)
+            artifact_store.delete_artifact(artifact.absolute_path)
         record = repository.reset_for_retry(job_id)
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
