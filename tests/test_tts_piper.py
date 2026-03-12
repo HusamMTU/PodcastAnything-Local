@@ -78,3 +78,32 @@ def test_piper_join_returns_valid_wav(tmp_path: Path) -> None:
     assert joined.file_name == "audio.wav"
     assert joined.content_type == "audio/wav"
     assert len(joined.data) > len(segment_a.data)
+
+
+def test_piper_provider_uses_sibling_config_for_model_path_override(tmp_path: Path) -> None:
+    model_a = tmp_path / "voice_a.onnx"
+    config_a = tmp_path / "voice_a.onnx.json"
+    model_override = tmp_path / "voice_override.onnx"
+    config_override = tmp_path / "voice_override.onnx.json"
+    model_a.write_text("", encoding="utf-8")
+    config_a.write_text("{}", encoding="utf-8")
+    model_override.write_text("", encoding="utf-8")
+    config_override.write_text("{}", encoding="utf-8")
+
+    provider = PiperTTSProvider(
+        model_path=str(model_a),
+        model_path_b=None,
+        config_path=str(config_a),
+        config_path_b=None,
+        speaker_id=None,
+        speaker_id_b=None,
+    )
+
+    model_path, config_path, speaker_id = provider._resolve_voice_inputs(
+        voice_id=str(model_override),
+        speaker="host_a",
+    )
+
+    assert model_path == str(model_override.resolve())
+    assert config_path == str(config_override.resolve())
+    assert speaker_id is None
