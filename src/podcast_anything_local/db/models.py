@@ -16,7 +16,6 @@ class CreateJobInput:
     title: str | None = None
     style: str = "podcast"
     script_mode: str = "single"
-    rewrite_provider: str = "demo"
     tts_provider: str = "wave"
     voice_id: str | None = None
     voice_id_b: str | None = None
@@ -35,7 +34,6 @@ class JobRecord:
     title: str | None
     style: str
     script_mode: str
-    rewrite_provider: str
     tts_provider: str
     voice_id: str | None
     voice_id_b: str | None

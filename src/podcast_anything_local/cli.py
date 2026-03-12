@@ -28,7 +28,6 @@ class JobSubmissionOptions:
     title: str | None
     style: str
     script_mode: str
-    rewrite_provider: str | None
     tts_provider: str | None
     voice_id: str | None
     voice_id_b: str | None
@@ -50,7 +49,6 @@ class PodcastAnythingApiClient:
             "title": options.title,
             "style": options.style,
             "script_mode": options.script_mode,
-            "rewrite_provider": options.rewrite_provider,
             "tts_provider": options.tts_provider,
             "voice_id": options.voice_id,
             "voice_id_b": options.voice_id_b,
@@ -160,7 +158,6 @@ def build_parser() -> argparse.ArgumentParser:
         default="single",
         help="Script mode to request.",
     )
-    parser.add_argument("--rewrite-provider", default=None, help="Rewrite provider override.")
     parser.add_argument("--tts-provider", default=None, help="TTS provider override.")
     parser.add_argument("--voice-id", default=None, help="Voice override for HOST_A / single mode.")
     parser.add_argument("--voice-id-b", default=None, help="Voice override for HOST_B in duo mode.")
@@ -208,7 +205,6 @@ def options_from_args(args: argparse.Namespace) -> JobSubmissionOptions:
         title=args.title,
         style=args.style,
         script_mode=args.script_mode,
-        rewrite_provider=args.rewrite_provider,
         tts_provider=args.tts_provider,
         voice_id=args.voice_id,
         voice_id_b=args.voice_id_b,

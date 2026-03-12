@@ -7,7 +7,6 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
 from fastapi.responses import FileResponse
-from fastapi.responses import StreamingResponse
 
 from podcast_anything_local.db.models import CreateJobInput
 from podcast_anything_local.db.repository import JobNotFoundError, generate_job_id
@@ -29,11 +28,10 @@ def app_config(request: Request) -> AppConfigResponse:
     return AppConfigResponse(
         app_name=settings.app_name,
         default_web_extractor=settings.web_extractor,
-        default_rewrite_provider=settings.rewrite_provider,
+        script_writer="openai",
         default_tts_provider=settings.tts_provider,
         default_style=settings.rewrite_style,
         supported_web_extractors=["auto", "trafilatura", "bs4"],
-        supported_rewrite_providers=["openai", "ollama"],
         supported_tts_providers=["piper", "elevenlabs"],
     )
 
@@ -81,7 +79,6 @@ async def create_job(request: Request) -> JobResponse:
             title=payload["title"],
             style=payload["style"] or settings.rewrite_style,
             script_mode=payload["script_mode"],
-            rewrite_provider=payload["rewrite_provider"] or settings.rewrite_provider,
             tts_provider=payload["tts_provider"] or settings.tts_provider,
             voice_id=payload["voice_id"],
             voice_id_b=payload["voice_id_b"],
@@ -106,36 +103,6 @@ def get_job(job_id: str, request: Request) -> JobResponse:
     except JobNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     return JobResponse.from_record(job)
-
-
-@router.get("/jobs/{job_id}/rewrite-stream")
-def stream_job_rewrite(job_id: str, request: Request) -> StreamingResponse:
-    repository = request.app.state.repository
-    job_event_broker = request.app.state.job_event_broker
-    try:
-        repository.get_job(job_id)
-    except JobNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
-    return StreamingResponse(
-        job_event_broker.stream(job_id),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
-    )
-
-
-@router.get("/jobs/{job_id}/rewrite-preview")
-def get_job_rewrite_preview(job_id: str, request: Request) -> dict[str, str]:
-    repository = request.app.state.repository
-    job_event_broker = request.app.state.job_event_broker
-    try:
-        repository.get_job(job_id)
-    except JobNotFoundError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-    return {"text": job_event_broker.get_rewrite_snapshot(job_id)}
 
 
 @router.get("/jobs/{job_id}/artifacts", response_model=list[ArtifactResponse])
@@ -205,7 +172,6 @@ async def _parse_create_request(request: Request) -> dict[str, Any]:
             title=payload.title,
             style=payload.style,
             script_mode=payload.script_mode,
-            rewrite_provider=payload.rewrite_provider,
             tts_provider=payload.tts_provider,
             voice_id=payload.voice_id,
             voice_id_b=payload.voice_id_b,
@@ -222,7 +188,6 @@ async def _parse_create_request(request: Request) -> dict[str, Any]:
             title=_optional_form_value(form.get("title")),
             style=_optional_form_value(form.get("style")) or "podcast",
             script_mode=_optional_form_value(form.get("script_mode")) or "single",
-            rewrite_provider=_optional_form_value(form.get("rewrite_provider")),
             tts_provider=_optional_form_value(form.get("tts_provider")),
             voice_id=_optional_form_value(form.get("voice_id")),
             voice_id_b=_optional_form_value(form.get("voice_id_b")),
@@ -239,7 +204,6 @@ def _normalize_inputs(
     title: str | None,
     style: str,
     script_mode: str,
-    rewrite_provider: str | None,
     tts_provider: str | None,
     voice_id: str | None,
     voice_id_b: str | None,
@@ -258,7 +222,6 @@ def _normalize_inputs(
         "title": title,
         "style": style.strip() if style else "podcast",
         "script_mode": script_mode,
-        "rewrite_provider": rewrite_provider.strip().lower() if rewrite_provider else None,
         "tts_provider": tts_provider.strip().lower() if tts_provider else None,
         "voice_id": voice_id,
         "voice_id_b": voice_id_b,

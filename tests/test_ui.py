@@ -17,11 +17,7 @@ def _build_settings(tmp_path: Path) -> Settings:
         database_path=data_dir / "app.db",
         jobs_dir=data_dir / "jobs",
         web_extractor="auto",
-        rewrite_provider="openai",
         rewrite_style="podcast",
-        ollama_base_url="http://localhost:11434/api",
-        ollama_model="gemma3:4b",
-        ollama_generate_timeout_seconds=600,
         openai_base_url="https://api.openai.com/v1",
         openai_api_key=None,
         openai_model="gpt-4o-mini",
@@ -55,6 +51,7 @@ def test_root_serves_built_in_ui(tmp_path: Path) -> None:
         assert 'accept=".txt,.pdf,.docx,.pptx"' in response.text
         assert 'class="field-grid field-grid-compact form-span-full"' in response.text
         assert '<details class="artifact-card artifact-card-collapsible">' in response.text
+        assert 'name="rewrite_provider"' not in response.text
         assert "Title override" not in response.text
         assert 'name="title"' not in response.text
         assert 'id="job-title-value"' in response.text
@@ -73,14 +70,11 @@ def test_config_exposes_current_defaults(tmp_path: Path) -> None:
         payload = response.json()
         assert payload["app_name"] == "Podcast Anything Local Test"
         assert payload["default_web_extractor"] == "auto"
-        assert payload["default_rewrite_provider"] == "openai"
+        assert payload["script_writer"] == "openai"
         assert payload["default_tts_provider"] == "piper"
         assert "auto" in payload["supported_web_extractors"]
         assert "bs4" in payload["supported_web_extractors"]
-        assert payload["supported_rewrite_providers"][0] == "openai"
-        assert "ollama" in payload["supported_rewrite_providers"]
         assert "piper" in payload["supported_tts_providers"]
-        assert "demo" not in payload["supported_rewrite_providers"]
         assert "wave" not in payload["supported_tts_providers"]
 
 
@@ -105,8 +99,6 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "scrollbar-gutter: stable;" in css_response.text
         assert js_response.status_code == 200
         assert "fetchJson" in js_response.text
-        assert "EventSource" in js_response.text
-        assert "/rewrite-preview" in js_response.text
         assert 'source_text' in js_response.text
         assert "loadHealth" not in js_response.text
         assert 'voice_id' not in js_response.text

@@ -35,35 +35,13 @@ class JobRepository:
 
     def init_db(self) -> None:
         with self._connect() as connection:
-            connection.execute(
-                """
-                CREATE TABLE IF NOT EXISTS jobs (
-                    job_id TEXT PRIMARY KEY,
-                    status TEXT NOT NULL,
-                    current_stage TEXT,
-                    source_kind TEXT NOT NULL,
-                    source_url TEXT,
-                    source_file_name TEXT,
-                    source_file_path TEXT,
-                    title TEXT,
-                    style TEXT NOT NULL,
-                    script_mode TEXT NOT NULL,
-                    rewrite_provider TEXT NOT NULL,
-                    tts_provider TEXT NOT NULL,
-                    voice_id TEXT,
-                    voice_id_b TEXT,
-                    source_artifact TEXT,
-                    script_artifact TEXT,
-                    audio_artifact TEXT,
-                    error TEXT,
-                    metadata_json TEXT NOT NULL,
-                    created_at TEXT NOT NULL,
-                    updated_at TEXT NOT NULL,
-                    started_at TEXT,
-                    completed_at TEXT
-                )
-                """
-            )
+            columns = {
+                row["name"] for row in connection.execute("PRAGMA table_info(jobs)").fetchall()
+            }
+            if not columns:
+                self._create_jobs_table(connection)
+            elif "rewrite_provider" in columns:
+                self._migrate_drop_rewrite_provider(connection)
 
     def create_job(self, payload: CreateJobInput) -> JobRecord:
         job_id = payload.job_id or generate_job_id()
@@ -75,10 +53,10 @@ class JobRepository:
                 INSERT INTO jobs (
                     job_id, status, current_stage, source_kind, source_url,
                     source_file_name, source_file_path, title, style, script_mode,
-                    rewrite_provider, tts_provider, voice_id, voice_id_b,
+                    tts_provider, voice_id, voice_id_b,
                     source_artifact, script_artifact, audio_artifact, error,
                     metadata_json, created_at, updated_at, started_at, completed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
@@ -91,7 +69,6 @@ class JobRepository:
                     payload.title,
                     payload.style,
                     payload.script_mode,
-                    payload.rewrite_provider,
                     payload.tts_provider,
                     payload.voice_id,
                     payload.voice_id_b,
@@ -252,6 +229,59 @@ class JobRepository:
         connection.row_factory = sqlite3.Row
         return connection
 
+    def _create_jobs_table(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS jobs (
+                job_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL,
+                current_stage TEXT,
+                source_kind TEXT NOT NULL,
+                source_url TEXT,
+                source_file_name TEXT,
+                source_file_path TEXT,
+                title TEXT,
+                style TEXT NOT NULL,
+                script_mode TEXT NOT NULL,
+                tts_provider TEXT NOT NULL,
+                voice_id TEXT,
+                voice_id_b TEXT,
+                source_artifact TEXT,
+                script_artifact TEXT,
+                audio_artifact TEXT,
+                error TEXT,
+                metadata_json TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                started_at TEXT,
+                completed_at TEXT
+            )
+            """
+        )
+
+    def _migrate_drop_rewrite_provider(self, connection: sqlite3.Connection) -> None:
+        connection.execute("ALTER TABLE jobs RENAME TO jobs_legacy_rewrite_provider")
+        self._create_jobs_table(connection)
+        connection.execute(
+            """
+            INSERT INTO jobs (
+                job_id, status, current_stage, source_kind, source_url,
+                source_file_name, source_file_path, title, style, script_mode,
+                tts_provider, voice_id, voice_id_b, source_artifact,
+                script_artifact, audio_artifact, error, metadata_json,
+                created_at, updated_at, started_at, completed_at
+            )
+            SELECT
+                job_id, status, current_stage, source_kind, source_url,
+                source_file_name, source_file_path, title, style, script_mode,
+                tts_provider, voice_id, voice_id_b, source_artifact,
+                script_artifact, audio_artifact, error, metadata_json,
+                created_at, updated_at, started_at, completed_at
+            FROM jobs_legacy_rewrite_provider
+            """
+        )
+        connection.execute("DROP TABLE jobs_legacy_rewrite_provider")
+
     def _update_fields(self, job_id: str, updates: dict[str, object | None]) -> None:
         if not updates:
             return
@@ -278,7 +308,6 @@ class JobRepository:
             title=row["title"],
             style=row["style"],
             script_mode=row["script_mode"],
-            rewrite_provider=row["rewrite_provider"],
             tts_provider=row["tts_provider"],
             voice_id=row["voice_id"],
             voice_id_b=row["voice_id_b"],

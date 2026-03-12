@@ -2,8 +2,6 @@ const state = {
   config: null,
   currentJobId: null,
   pollTimer: null,
-  rewriteStream: null,
-  liveRewriteText: "",
   sourceMode: "url",
 };
 
@@ -17,7 +15,6 @@ const elements = {
   textFields: document.getElementById("text-fields"),
   fileFields: document.getElementById("file-fields"),
   scriptMode: document.getElementById("script-mode"),
-  rewriteProvider: document.getElementById("rewrite-provider"),
   ttsProvider: document.getElementById("tts-provider"),
   formMessage: document.getElementById("form-message"),
   submitButton: document.getElementById("submit-button"),
@@ -75,9 +72,7 @@ async function loadConfig() {
   try {
     const payload = await fetchJson("/config");
     state.config = payload;
-    elements.providerSummary.textContent =
-      `${payload.default_rewrite_provider} + ${payload.default_tts_provider}`;
-    fillSelect(elements.rewriteProvider, payload.supported_rewrite_providers);
+    elements.providerSummary.textContent = `${payload.script_writer} + ${payload.default_tts_provider}`;
     fillSelect(elements.ttsProvider, payload.supported_tts_providers);
   } catch (error) {
     elements.providerSummary.textContent = "Config unavailable";
@@ -152,7 +147,6 @@ function buildSubmissionPayload() {
   }
 
   appendIfValue(formData, "script_mode", elements.scriptMode.value);
-  appendIfValue(formData, "rewrite_provider", elements.rewriteProvider.value);
   appendIfValue(formData, "tts_provider", elements.ttsProvider.value);
 
   return formData;
@@ -185,9 +179,6 @@ async function activateJob(jobId) {
 
 async function activateJobWithSeed(jobId, seedJob) {
   state.currentJobId = jobId;
-  if (seedJob) {
-    maybeStartRewriteStream(seedJob);
-  }
 
   const job = await loadJob(jobId, { includeArtifacts: true });
   if (job && job.status !== "completed" && job.status !== "failed") {
@@ -216,12 +207,7 @@ async function loadJob(jobId, options = {}) {
   try {
     const job = await fetchJson(`/jobs/${jobId}`);
     state.currentJobId = jobId;
-    maybeStartRewriteStream(job);
     renderJob(job);
-
-    if (job.status !== "completed" && job.status !== "failed") {
-      await loadRewritePreview(jobId, { silent: true });
-    }
 
     if (job.status === "completed" || includeArtifacts) {
       await loadArtifacts(jobId);
@@ -229,7 +215,6 @@ async function loadJob(jobId, options = {}) {
 
     if (job.status === "completed" || job.status === "failed") {
       stopPolling();
-      stopRewriteStream();
       await refreshJobs();
     }
 
@@ -250,7 +235,7 @@ function renderJob(job) {
   elements.jobStage.textContent = job.current_stage || "queued";
   elements.jobSourceKind.textContent = job.source_kind;
   elements.jobScriptMode.textContent = formatScriptMode(job.script_mode);
-  elements.jobProviders.textContent = `${job.rewrite_provider} + ${job.tts_provider}`;
+  elements.jobProviders.textContent = `openai + ${job.tts_provider}`;
   renderStatusBadge(job.status);
   elements.jobStageSpinner.classList.toggle(
     "is-hidden",
@@ -284,23 +269,6 @@ async function loadArtifacts(jobId) {
   const artifacts = await fetchJson(`/jobs/${jobId}/artifacts`);
   renderArtifactList(artifacts);
   await Promise.all([loadScriptArtifact(artifacts), loadAudioArtifact(artifacts)]);
-}
-
-async function loadRewritePreview(jobId, options = {}) {
-  const { silent = false } = options;
-  try {
-    const payload = await fetchJson(`/jobs/${jobId}/rewrite-preview`);
-    if (typeof payload.text === "string" && payload.text.trim()) {
-      state.liveRewriteText = payload.text;
-      if (!elements.scriptDownload.getAttribute("href")) {
-        renderLiveRewriteText();
-      }
-    }
-  } catch (error) {
-    if (!silent) {
-      setMessage(error.message, true);
-    }
-  }
 }
 
 function renderArtifactList(artifacts) {
@@ -339,7 +307,7 @@ async function loadScriptArtifact(artifacts) {
   const script = artifacts.find((artifact) => artifact.name === "script.txt");
 
   if (!script) {
-    elements.scriptPreview.textContent = state.liveRewriteText || "No script artifact loaded yet.";
+    elements.scriptPreview.textContent = "No script artifact loaded yet.";
     elements.scriptDownload.classList.add("is-hidden");
     elements.scriptDownload.removeAttribute("href");
     return;
@@ -427,93 +395,6 @@ async function retryCurrentJob() {
     await refreshJobs();
   } catch (error) {
     setMessage(error.message, true);
-  }
-}
-
-function maybeStartRewriteStream(job) {
-  if (!job || job.job_id !== state.currentJobId) {
-    return;
-  }
-
-  const streamableProvider = job.rewrite_provider === "ollama";
-  const isStreamingStage = ["queued", "running"].includes(job.status || "");
-  if (!streamableProvider || !isStreamingStage) {
-    if (job.status === "completed" || job.status === "failed") {
-      stopRewriteStream();
-    }
-    return;
-  }
-
-  if (state.rewriteStream) {
-    return;
-  }
-
-  startRewriteStream(job.job_id);
-}
-
-function startRewriteStream(jobId) {
-  stopRewriteStream();
-  state.liveRewriteText = "";
-  elements.scriptPreview.textContent = "Streaming rewrite…";
-  elements.scriptDownload.classList.add("is-hidden");
-  elements.scriptDownload.removeAttribute("href");
-
-  const stream = new EventSource(`/jobs/${jobId}/rewrite-stream`);
-  state.rewriteStream = stream;
-
-  stream.addEventListener("rewrite_snapshot", (event) => {
-    const payload = parseStreamEvent(event);
-    state.liveRewriteText = payload.text || "";
-    renderLiveRewriteText();
-  });
-
-  stream.addEventListener("rewrite_chunk", (event) => {
-    const payload = parseStreamEvent(event);
-    state.liveRewriteText += payload.text || "";
-    renderLiveRewriteText();
-  });
-
-  stream.addEventListener("rewrite_complete", () => {
-    stopRewriteStream();
-  });
-
-  stream.addEventListener("job_failed", (event) => {
-    const payload = parseStreamEvent(event);
-    if (payload.error) {
-      setMessage(payload.error, true);
-    }
-    stopRewriteStream();
-  });
-
-  stream.onerror = () => {
-    if (state.rewriteStream === stream) {
-      stream.close();
-      state.rewriteStream = null;
-    }
-  };
-}
-
-function stopRewriteStream() {
-  if (state.rewriteStream) {
-    state.rewriteStream.close();
-    state.rewriteStream = null;
-  }
-}
-
-function renderLiveRewriteText() {
-  const text = state.liveRewriteText.trim();
-  if (!text) {
-    elements.scriptPreview.textContent = "Waiting for rewrite stream…";
-    return;
-  }
-  elements.scriptPreview.textContent = text;
-}
-
-function parseStreamEvent(event) {
-  try {
-    return JSON.parse(event.data || "{}");
-  } catch (error) {
-    return {};
   }
 }
 

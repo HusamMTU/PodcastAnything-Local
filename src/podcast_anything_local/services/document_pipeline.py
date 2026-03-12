@@ -45,7 +45,7 @@ class MultimodalDocumentService:
         self,
         settings: Settings,
         *,
-        provider_factory: Callable[[str], OpenAICompatibleRewriteProvider] | None = None,
+        provider_factory: Callable[[], OpenAICompatibleRewriteProvider] | None = None,
     ) -> None:
         self._settings = settings
         self._provider_factory = provider_factory or self._build_provider
@@ -55,12 +55,10 @@ class MultimodalDocumentService:
         *,
         source_type: str | None,
         source_file_path: str | None,
-        rewrite_provider: str | None,
     ) -> bool:
         return (
             (source_type or "").strip().lower() == "pdf"
             and bool(source_file_path)
-            and (rewrite_provider or self._settings.rewrite_provider).strip().lower() == "openai"
         )
 
     def analyze_pdf_document(
@@ -69,17 +67,12 @@ class MultimodalDocumentService:
         source_file_path: str,
         title: str | None,
         script_mode: str,
-        rewrite_provider: str | None,
     ) -> DocumentAnalysisBundle:
         pdf_path = Path(source_file_path)
         if not pdf_path.is_file():
             raise DocumentPipelineError(f"PDF source file not found: {source_file_path}")
 
-        provider = self._provider_factory(rewrite_provider or self._settings.rewrite_provider)
-        if not hasattr(provider, "summarize_pdf_chunk") or not hasattr(provider, "build_document_map"):
-            raise DocumentPipelineError(
-                "The selected rewrite provider does not support the multimodal document pipeline."
-            )
+        provider = self._provider_factory()
 
         chunks = _build_pdf_chunks(pdf_path)
         if not chunks:
@@ -118,13 +111,8 @@ class MultimodalDocumentService:
         document_map: dict[str, object],
         title: str | None,
         script_mode: str,
-        rewrite_provider: str | None,
     ) -> dict[str, object]:
-        provider = self._provider_factory(rewrite_provider or self._settings.rewrite_provider)
-        if not hasattr(provider, "build_podcast_plan"):
-            raise DocumentPipelineError(
-                "The selected rewrite provider does not support podcast planning for documents."
-            )
+        provider = self._provider_factory()
         return provider.build_podcast_plan(
             document_map=document_map,
             title=title,
@@ -261,12 +249,7 @@ class MultimodalDocumentService:
             "multimodal_document_chunk_overlap_pages": _CHUNK_OVERLAP_PAGES,
         }
 
-    def _build_provider(self, provider_name: str) -> OpenAICompatibleRewriteProvider:
-        normalized = provider_name.strip().lower()
-        if normalized != "openai":
-            raise DocumentPipelineError(
-                "Only the OpenAI rewrite provider currently supports the multimodal document pipeline."
-            )
+    def _build_provider(self) -> OpenAICompatibleRewriteProvider:
         return OpenAICompatibleRewriteProvider(
             base_url=self._settings.openai_base_url,
             api_key=self._settings.openai_api_key,

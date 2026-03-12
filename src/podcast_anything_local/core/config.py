@@ -47,11 +47,7 @@ class Settings:
     database_path: Path
     jobs_dir: Path
     web_extractor: str
-    rewrite_provider: str
     rewrite_style: str
-    ollama_base_url: str
-    ollama_model: str
-    ollama_generate_timeout_seconds: int
     openai_base_url: str
     openai_api_key: str | None
     openai_model: str
@@ -83,10 +79,6 @@ def load_settings() -> Settings:
     database_path = database_path.resolve()
     jobs_dir = Path(_read_env("JOBS_DIR", str(data_dir / "jobs"))).expanduser().resolve()
 
-    rewrite_provider = _read_env("REWRITE_PROVIDER", "openai").lower()
-    if rewrite_provider not in {"demo", "ollama", "openai"}:
-        raise ConfigError("REWRITE_PROVIDER must be one of: demo, ollama, openai")
-
     tts_provider = _read_env("TTS_PROVIDER", "wave").lower()
     if tts_provider not in {"wave", "piper", "elevenlabs"}:
         raise ConfigError("TTS_PROVIDER must be one of: wave, piper, elevenlabs")
@@ -102,11 +94,7 @@ def load_settings() -> Settings:
         database_path=database_path,
         jobs_dir=jobs_dir,
         web_extractor=web_extractor,
-        rewrite_provider=rewrite_provider,
         rewrite_style=_read_env("REWRITE_STYLE", "podcast"),
-        ollama_base_url=_read_env("OLLAMA_BASE_URL", "http://localhost:11434/api"),
-        ollama_model=_read_env("OLLAMA_MODEL", "gemma3:4b"),
-        ollama_generate_timeout_seconds=_read_int_env("OLLAMA_GENERATE_TIMEOUT_SECONDS", 600),
         openai_base_url=_read_env("OPENAI_BASE_URL", "https://api.openai.com/v1"),
         openai_api_key=_optional_env("OPENAI_API_KEY"),
         openai_model=_read_env("OPENAI_MODEL", "gpt-4o-mini"),
