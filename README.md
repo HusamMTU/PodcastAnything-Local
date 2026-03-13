@@ -1,4 +1,6 @@
-# Podcast Anything
+<p align="center">
+  <img src="assets/logo.png" alt="Podcast Anything" width="520" />
+</p>
 
 Podcast Anything turns source material into a short podcast draft. Give it a
 webpage URL, YouTube URL, pasted text, or an uploaded document, and it will
@@ -12,6 +14,25 @@ The project is built for local or self-hosted use. The default stack is:
 Documents with layout or slide structure go through a multimodal planning path.
 `pdf`, `docx`, and `pptx` inputs are analyzed as page-based documents before the
 final script is written, and `pptx` slide notes are included in that analysis.
+
+## Table of Contents
+
+- [Supported Features](#supported-features)
+- [Pipeline Overview](#pipeline-overview)
+- [Artifacts](#artifacts)
+- [Quick Start](#quick-start)
+  - [1. Create the environment](#1-create-the-environment)
+  - [2. Install Piper and download voices](#2-install-piper-and-download-voices)
+  - [3. Start the app](#3-start-the-app)
+  - [4. Submit a job](#4-submit-a-job)
+- [Usage](#usage)
+  - [Web UI](#web-ui)
+  - [CLI](#cli)
+  - [API](#api)
+- [Configuration](#configuration)
+- [Development](#development)
+- [CI](#ci)
+- [Troubleshooting](#troubleshooting)
 
 ## Supported Features
 
