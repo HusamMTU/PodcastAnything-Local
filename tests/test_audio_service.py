@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 from podcast_anything_local.core.config import Settings
@@ -154,4 +155,37 @@ HOST_B: Glad to be here.
     assert provider.calls == [
         ("Welcome back.", None, "host_a"),
         ("Glad to be here.", "host_b", "host_b"),
+    ]
+
+
+def test_audio_service_uses_openai_voice_defaults_without_piper_model_paths(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    provider = _CapturingProvider()
+    settings = _build_settings(tmp_path)
+    settings = replace(
+        settings,
+        tts_provider="openai",
+        tts_default_voice="./data/piper_voices/en_US-ryan-high.onnx",
+        openai_tts_voice="marin",
+        openai_tts_voice_b="cedar",
+    )
+    service = AudioService(settings)
+    monkeypatch.setattr(service, "_build_provider", lambda provider_name: provider)
+
+    service.synthesize(
+        script_text="""
+HOST_A: Welcome back.
+HOST_B: Glad to be here.
+""",
+        script_mode="duo",
+        provider_name="openai",
+        voice_id=None,
+        voice_id_b=None,
+    )
+
+    assert provider.calls == [
+        ("Welcome back.", "marin", "host_a"),
+        ("Glad to be here.", "cedar", "host_b"),
     ]

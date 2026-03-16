@@ -51,7 +51,7 @@ final script is written, and `pptx` slide notes are included in that analysis.
 | PPTX upload | Yes | Extracts slide text and notes, then normalizes into `normalized.pdf` |
 | Podcast modes | `single`, `duo` | Targets about 2-4 minutes of audio |
 | Script writer | OpenAI | Current built-in rewrite provider |
-| Voice generators | Piper, ElevenLabs | Piper is the default local option |
+| Voice generators | Piper, OpenAI, ElevenLabs | Piper is the default local option; OpenAI is the simplest hosted option |
 | Interfaces | Web UI, API, CLI | All use the same local job store |
 | Output artifacts | Yes | `script.txt`, `audio.wav`, `metadata.json`, plus planning artifacts for document jobs |
 
@@ -277,12 +277,18 @@ OPENAI_MODEL=gpt-4o-mini
 
 TTS_PROVIDER=piper
 TTS_DEFAULT_VOICE=./data/piper_voices/en_US-ryan-high.onnx
+OPENAI_TTS_MODEL=gpt-4o-mini-tts
+OPENAI_TTS_VOICE=marin
+OPENAI_TTS_VOICE_B=cedar
+OPENAI_TTS_RESPONSE_FORMAT=wav
 PIPER_MODEL_PATH=./data/piper_voices/en_US-lessac-high.onnx
 PIPER_CONFIG_PATH=./data/piper_voices/en_US-lessac-high.onnx.json
 PIPER_MODEL_PATH_B=./data/piper_voices/en_US-ryan-high.onnx
 PIPER_CONFIG_PATH_B=./data/piper_voices/en_US-ryan-high.onnx.json
 PIPER_SPEAKER_ID=
 PIPER_SPEAKER_ID_B=
+ELEVENLABS_VOICE_ID=
+ELEVENLABS_VOICE_ID_B=
 ```
 
 In this setup:
@@ -296,6 +302,8 @@ Important settings:
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
 - `TTS_PROVIDER`
+- `OPENAI_TTS_MODEL`
+- `OPENAI_TTS_VOICE`
 - `PIPER_MODEL_PATH`
 - `PIPER_CONFIG_PATH`
 - `DATA_DIR`
@@ -307,8 +315,11 @@ Notes:
 - `WEB_EXTRACTOR=bs4` forces the simpler BeautifulSoup extractor
 - for long PDFs with figures, layout, and page visuals, `gpt-4.1` is usually a
   stronger choice than `gpt-4o-mini`
+- if you want hosted TTS with the same vendor as script writing, set
+  `TTS_PROVIDER=openai`; `OPENAI_TTS_RESPONSE_FORMAT=wav` is recommended and is
+  required for reliable duo turn joining
 - if you want hosted TTS instead of local Piper, set `TTS_PROVIDER=elevenlabs`
-  and fill in `ELEVENLABS_API_KEY`
+  and fill in `ELEVENLABS_API_KEY` plus `ELEVENLABS_VOICE_ID`
 
 OpenAI is the only built-in podcast script writer in this repo. The rewrite
 provider boundary is still isolated in code so future providers such as Grok or

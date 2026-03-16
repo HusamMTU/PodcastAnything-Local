@@ -63,6 +63,12 @@ class Settings:
     elevenlabs_api_key: str | None
     elevenlabs_model_id: str
     elevenlabs_output_format: str
+    openai_tts_model: str = "gpt-4o-mini-tts"
+    openai_tts_voice: str = "marin"
+    openai_tts_voice_b: str = "cedar"
+    openai_tts_response_format: str = "wav"
+    elevenlabs_voice_id: str | None = None
+    elevenlabs_voice_id_b: str | None = None
 
     def ensure_directories(self) -> None:
         self.data_dir.mkdir(parents=True, exist_ok=True)
@@ -80,12 +86,18 @@ def load_settings() -> Settings:
     jobs_dir = Path(_read_env("JOBS_DIR", str(data_dir / "jobs"))).expanduser().resolve()
 
     tts_provider = _read_env("TTS_PROVIDER", "wave").lower()
-    if tts_provider not in {"wave", "piper", "elevenlabs"}:
-        raise ConfigError("TTS_PROVIDER must be one of: wave, piper, elevenlabs")
+    if tts_provider not in {"wave", "piper", "elevenlabs", "openai"}:
+        raise ConfigError("TTS_PROVIDER must be one of: wave, piper, elevenlabs, openai")
 
     web_extractor = _read_env("WEB_EXTRACTOR", "auto").lower()
     if web_extractor not in {"auto", "trafilatura", "bs4"}:
         raise ConfigError("WEB_EXTRACTOR must be one of: auto, trafilatura, bs4")
+
+    openai_tts_response_format = _read_env("OPENAI_TTS_RESPONSE_FORMAT", "wav").lower()
+    if openai_tts_response_format not in {"wav", "mp3", "flac", "aac", "opus", "pcm"}:
+        raise ConfigError(
+            "OPENAI_TTS_RESPONSE_FORMAT must be one of: wav, mp3, flac, aac, opus, pcm"
+        )
 
     return Settings(
         app_env=_read_env("APP_ENV", "development"),
@@ -110,4 +122,10 @@ def load_settings() -> Settings:
         elevenlabs_api_key=_optional_env("ELEVENLABS_API_KEY"),
         elevenlabs_model_id=_read_env("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2"),
         elevenlabs_output_format=_read_env("ELEVENLABS_OUTPUT_FORMAT", "mp3_44100_128"),
+        openai_tts_model=_read_env("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
+        openai_tts_voice=_read_env("OPENAI_TTS_VOICE", "marin"),
+        openai_tts_voice_b=_read_env("OPENAI_TTS_VOICE_B", "cedar"),
+        openai_tts_response_format=openai_tts_response_format,
+        elevenlabs_voice_id=_optional_env("ELEVENLABS_VOICE_ID"),
+        elevenlabs_voice_id_b=_optional_env("ELEVENLABS_VOICE_ID_B"),
     )
