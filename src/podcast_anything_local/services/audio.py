@@ -7,6 +7,7 @@ import re
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.providers.tts.base import SynthesizedAudio, TTSProvider, TTSProviderError
 from podcast_anything_local.providers.tts.elevenlabs import ElevenLabsTTSProvider
+from podcast_anything_local.providers.tts.openai import OpenAITTSProvider
 from podcast_anything_local.providers.tts.piper import PiperTTSProvider
 from podcast_anything_local.providers.tts.wave import WaveTTSProvider
 
@@ -58,14 +59,14 @@ class AudioService:
         voice_id_b: str | None,
     ) -> SynthesizedAudio:
         resolved_provider_name = provider_name or self._settings.tts_provider
-        provider = self._build_provider(resolved_provider_name)
+        normalized_provider_name = resolved_provider_name.strip().lower()
+        provider = self._build_provider(normalized_provider_name)
         if script_mode == "duo":
-            host_a_voice = voice_id
-            host_b_voice = voice_id_b or self._settings.tts_duo_voice
-
-            if resolved_provider_name.strip().lower() == "wave":
-                host_a_voice = host_a_voice or "host_a"
-                host_b_voice = host_b_voice or "host_b"
+            host_a_voice, host_b_voice = self._resolve_duo_voices(
+                provider_name=normalized_provider_name,
+                voice_id=voice_id,
+                voice_id_b=voice_id_b,
+            )
 
             turns = _parse_duo_turns(script_text)
             if not turns:
@@ -82,9 +83,10 @@ class AudioService:
                 ]
             return provider.join(segments)
 
-        host_a_voice = voice_id or self._settings.tts_default_voice
-        if resolved_provider_name.strip().lower() == "wave":
-            host_a_voice = host_a_voice or "host_a"
+        host_a_voice = self._resolve_single_voice(
+            provider_name=normalized_provider_name,
+            voice_id=voice_id,
+        )
 
         spoken_text = _sanitize_single_host_script(script_text)
         if not spoken_text:
@@ -110,7 +112,46 @@ class AudioService:
                 model_id=self._settings.elevenlabs_model_id,
                 output_format=self._settings.elevenlabs_output_format,
             )
+        if normalized == "openai":
+            return OpenAITTSProvider(
+                base_url=self._settings.openai_base_url,
+                api_key=self._settings.openai_api_key,
+                model=self._settings.openai_tts_model,
+                response_format=self._settings.openai_tts_response_format,
+            )
         raise TTSProviderError(f"Unsupported TTS provider: {provider_name}")
+
+    def _resolve_single_voice(self, *, provider_name: str, voice_id: str | None) -> str | None:
+        if provider_name == "wave":
+            return voice_id or "host_a"
+        if provider_name == "piper":
+            return voice_id or self._settings.tts_default_voice
+        if provider_name == "elevenlabs":
+            return voice_id or self._settings.elevenlabs_voice_id
+        if provider_name == "openai":
+            return voice_id or self._settings.openai_tts_voice
+        return voice_id
+
+    def _resolve_duo_voices(
+        self,
+        *,
+        provider_name: str,
+        voice_id: str | None,
+        voice_id_b: str | None,
+    ) -> tuple[str | None, str | None]:
+        if provider_name == "wave":
+            return voice_id or "host_a", voice_id_b or "host_b"
+        if provider_name == "piper":
+            return voice_id, voice_id_b or self._settings.tts_duo_voice
+        if provider_name == "elevenlabs":
+            return voice_id or self._settings.elevenlabs_voice_id, (
+                voice_id_b or self._settings.elevenlabs_voice_id_b
+            )
+        if provider_name == "openai":
+            return voice_id or self._settings.openai_tts_voice, (
+                voice_id_b or self._settings.openai_tts_voice_b
+            )
+        return voice_id, voice_id_b
 
 
 def _parse_duo_turns(script_text: str) -> list[tuple[str, str]]:

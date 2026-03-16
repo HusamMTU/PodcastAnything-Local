@@ -75,6 +75,7 @@ def test_config_exposes_current_defaults(tmp_path: Path) -> None:
         assert "auto" in payload["supported_web_extractors"]
         assert "bs4" in payload["supported_web_extractors"]
         assert "piper" in payload["supported_tts_providers"]
+        assert "openai" in payload["supported_tts_providers"]
         assert "wave" not in payload["supported_tts_providers"]
 
 
