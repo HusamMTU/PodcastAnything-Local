@@ -3,10 +3,19 @@ const state = {
   currentJobId: null,
   pollTimer: null,
   sourceMode: "url",
+  sourcesView: "new",
+  sourcesCollapsed: false,
+  studioCollapsed: true,
 };
 
 const elements = {
-  providerSummary: document.getElementById("provider-summary"),
+  workspaceGrid: document.getElementById("workspace-grid"),
+  sourcesPanel: document.getElementById("sources-panel"),
+  studioPanel: document.getElementById("studio-panel"),
+  sourcesCollapse: document.getElementById("sources-collapse"),
+  sourcesExpand: document.getElementById("sources-expand"),
+  studioCollapse: document.getElementById("studio-collapse"),
+  studioExpand: document.getElementById("studio-expand"),
   jobForm: document.getElementById("job-form"),
   sourceUrl: document.getElementById("source-url"),
   sourceText: document.getElementById("source-text"),
@@ -14,30 +23,30 @@ const elements = {
   urlFields: document.getElementById("url-fields"),
   textFields: document.getElementById("text-fields"),
   fileFields: document.getElementById("file-fields"),
+  sourcesViewButtons: Array.from(document.querySelectorAll("[data-sources-view]")),
+  sourcesViewPanels: {
+    new: document.getElementById("sources-view-panel-new"),
+    history: document.getElementById("sources-view-panel-history"),
+  },
   scriptMode: document.getElementById("script-mode"),
   ttsProvider: document.getElementById("tts-provider"),
+  settingsModeSummary: document.getElementById("settings-mode-summary"),
+  settingsVoiceSummary: document.getElementById("settings-voice-summary"),
   formMessage: document.getElementById("form-message"),
   submitButton: document.getElementById("submit-button"),
-  jobEmpty: document.getElementById("job-empty"),
   jobDetails: document.getElementById("job-details"),
-  jobId: document.getElementById("job-id"),
-  jobStatusBadge: document.getElementById("job-status-badge"),
+  jobTitleShell: document.getElementById("job-title-shell"),
   jobTitleValue: document.getElementById("job-title-value"),
   jobStageSpinner: document.getElementById("job-stage-spinner"),
   jobStage: document.getElementById("job-stage"),
-  jobSourceKind: document.getElementById("job-source-kind"),
-  jobScriptMode: document.getElementById("job-script-mode"),
-  jobProviders: document.getElementById("job-providers"),
   jobError: document.getElementById("job-error"),
   scriptPreview: document.getElementById("script-preview"),
   scriptDownload: document.getElementById("script-download"),
   audioPlayer: document.getElementById("audio-player"),
   audioDownload: document.getElementById("audio-download"),
-  audioEmpty: document.getElementById("audio-empty"),
   artifactList: document.getElementById("artifact-list"),
   recentJobs: document.getElementById("recent-jobs"),
   refreshJobsButton: document.getElementById("refresh-jobs-button"),
-  refreshJobButton: document.getElementById("refresh-job-button"),
   retryButton: document.getElementById("retry-button"),
   modeButtons: Array.from(document.querySelectorAll("[data-source-mode]")),
 };
@@ -50,18 +59,25 @@ document.addEventListener("DOMContentLoaded", () => {
 function bindEvents() {
   elements.jobForm.addEventListener("submit", onSubmitJob);
   elements.refreshJobsButton.addEventListener("click", () => void refreshJobs());
-  elements.refreshJobButton.addEventListener("click", () => {
-    if (state.currentJobId) {
-      void loadJob(state.currentJobId, { includeArtifacts: true });
-    }
-  });
   elements.retryButton.addEventListener("click", () => void retryCurrentJob());
+  elements.scriptMode.addEventListener("change", syncSelectedSettingsSummary);
+  elements.ttsProvider.addEventListener("change", syncSelectedSettingsSummary);
+  elements.sourcesCollapse.addEventListener("click", () => setPanelCollapsed("sources", true));
+  elements.sourcesExpand.addEventListener("click", () => setPanelCollapsed("sources", false));
+  elements.studioCollapse.addEventListener("click", () => setPanelCollapsed("studio", true));
+  elements.studioExpand.addEventListener("click", () => setPanelCollapsed("studio", false));
 
   for (const button of elements.modeButtons) {
     button.addEventListener("click", () => setSourceMode(button.dataset.sourceMode || "url"));
   }
 
+  for (const button of elements.sourcesViewButtons) {
+    button.addEventListener("click", () => setSourcesView(button.dataset.sourcesView || "new"));
+  }
+
   setSourceMode(state.sourceMode);
+  setSourcesView(state.sourcesView);
+  applyPanelState();
 }
 
 async function initialize() {
@@ -72,18 +88,16 @@ async function loadConfig() {
   try {
     const payload = await fetchJson("/config");
     state.config = payload;
-    elements.providerSummary.textContent = `${payload.script_writer} + ${payload.default_tts_provider}`;
     fillSelect(elements.ttsProvider, payload.supported_tts_providers);
-  } catch (error) {
-    elements.providerSummary.textContent = "Config unavailable";
-  }
+    syncSelectedSettingsSummary();
+  } catch (error) {}
 }
 
 function fillSelect(selectElement, values) {
   for (const value of values || []) {
     const option = document.createElement("option");
     option.value = value;
-    option.textContent = value;
+    option.textContent = formatProviderName(value);
     selectElement.append(option);
   }
 }
@@ -105,6 +119,18 @@ function setSourceMode(mode) {
   }
 }
 
+function setSourcesView(view) {
+  state.sourcesView = ["new", "history"].includes(view) ? view : "new";
+
+  for (const button of elements.sourcesViewButtons) {
+    button.classList.toggle("is-active", button.dataset.sourcesView === state.sourcesView);
+  }
+
+  for (const [panelView, panel] of Object.entries(elements.sourcesViewPanels)) {
+    panel.classList.toggle("is-hidden", panelView !== state.sourcesView);
+  }
+}
+
 async function onSubmitJob(event) {
   event.preventDefault();
   clearMessage();
@@ -113,7 +139,6 @@ async function onSubmitJob(event) {
     const formData = buildSubmissionPayload();
     setSubmitting(true);
     const job = await fetchJson("/jobs", { method: "POST", body: formData });
-    setMessage(`Started ${job.job_id}. Polling for completion…`);
     await activateJobWithSeed(job.job_id, job);
     await refreshJobs();
   } catch (error) {
@@ -160,7 +185,7 @@ function appendIfValue(formData, key, value) {
 
 function setSubmitting(isSubmitting) {
   elements.submitButton.disabled = isSubmitting;
-  elements.submitButton.textContent = isSubmitting ? "Starting…" : "Start job";
+  elements.submitButton.textContent = isSubmitting ? "Starting…" : "Create podcast";
 }
 
 function setMessage(text, isError = false) {
@@ -228,15 +253,17 @@ async function loadJob(jobId, options = {}) {
 }
 
 function renderJob(job) {
-  elements.jobEmpty.classList.add("is-hidden");
-  elements.jobDetails.classList.remove("is-hidden");
-  elements.jobId.textContent = job.job_id;
-  elements.jobTitleValue.textContent = job.title || formatPendingTitle(job.status);
+  elements.scriptMode.value = job.script_mode || elements.scriptMode.value;
+  elements.ttsProvider.value = job.tts_provider || "";
+  if (job.title) {
+    elements.jobTitleValue.textContent = job.title;
+    elements.jobTitleShell.classList.remove("is-hidden");
+  } else {
+    elements.jobTitleValue.textContent = "";
+    elements.jobTitleShell.classList.add("is-hidden");
+  }
   elements.jobStage.textContent = job.current_stage || "queued";
-  elements.jobSourceKind.textContent = job.source_kind;
-  elements.jobScriptMode.textContent = formatScriptMode(job.script_mode);
-  elements.jobProviders.textContent = `openai + ${job.tts_provider}`;
-  renderStatusBadge(job.status);
+  syncSelectedSettingsSummary();
   elements.jobStageSpinner.classList.toggle(
     "is-hidden",
     !["queued", "running"].includes(job.status || ""),
@@ -249,20 +276,6 @@ function renderJob(job) {
     elements.jobError.textContent = "";
     elements.jobError.classList.add("is-hidden");
   }
-}
-
-function formatPendingTitle(status) {
-  if (["queued", "running"].includes(status || "")) {
-    return "Generating title...";
-  }
-  return "Untitled";
-}
-
-function renderStatusBadge(status) {
-  const label = status || "queued";
-  elements.jobStatusBadge.textContent = label;
-  elements.jobStatusBadge.className = "status-badge";
-  elements.jobStatusBadge.classList.add(`is-${label}`);
 }
 
 async function loadArtifacts(jobId) {
@@ -307,14 +320,14 @@ async function loadScriptArtifact(artifacts) {
   const script = artifacts.find((artifact) => artifact.name === "script.txt");
 
   if (!script) {
-    elements.scriptPreview.textContent = "No script artifact loaded yet.";
+    renderScriptPreview(null);
     elements.scriptDownload.classList.add("is-hidden");
     elements.scriptDownload.removeAttribute("href");
     return;
   }
 
   const text = await fetchText(script.download_path);
-  elements.scriptPreview.textContent = text || "The script artifact is empty.";
+  renderScriptPreview(text || "");
   elements.scriptDownload.href = script.download_path;
   elements.scriptDownload.classList.remove("is-hidden");
 }
@@ -327,7 +340,6 @@ async function loadAudioArtifact(artifacts) {
     elements.audioPlayer.removeAttribute("src");
     elements.audioDownload.classList.add("is-hidden");
     elements.audioDownload.removeAttribute("href");
-    elements.audioEmpty.classList.remove("is-hidden");
     return;
   }
 
@@ -336,7 +348,6 @@ async function loadAudioArtifact(artifacts) {
   elements.audioPlayer.classList.remove("is-hidden");
   elements.audioDownload.href = audio.download_path;
   elements.audioDownload.classList.remove("is-hidden");
-  elements.audioEmpty.classList.add("is-hidden");
 }
 
 async function refreshJobs() {
@@ -454,6 +465,179 @@ function formatScriptMode(value) {
     return "Single host";
   }
   return value || "-";
+}
+
+function formatProviderName(value) {
+  if (value === "openai") {
+    return "OpenAI";
+  }
+  if (value === "elevenlabs") {
+    return "ElevenLabs";
+  }
+  if (value === "wave") {
+    return "Wave";
+  }
+  return value || "-";
+}
+
+function getSelectedVoiceProviderName() {
+  const selected = elements.ttsProvider.value || state.config?.default_tts_provider || "";
+  return formatProviderName(selected);
+}
+
+function syncSelectedSettingsSummary() {
+  const modeLabel = formatScriptMode(elements.scriptMode.value);
+  const voiceLabel = getSelectedVoiceProviderName();
+
+  elements.settingsModeSummary.textContent = modeLabel;
+  elements.settingsVoiceSummary.textContent = voiceLabel;
+}
+
+function renderScriptPreview(text) {
+  elements.scriptPreview.replaceChildren();
+
+  if (text === null) {
+    elements.scriptPreview.append(createScriptPlaceholder("No script artifact loaded yet."));
+    return;
+  }
+
+  if (!text.trim()) {
+    elements.scriptPreview.append(createScriptPlaceholder("The script artifact is empty."));
+    return;
+  }
+
+  const lines = text.split(/\r?\n/);
+  let currentSpeaker = null;
+  let currentTurnLines = [];
+  let currentParagraphLines = [];
+
+  function flushTurn() {
+    if (!currentSpeaker || !currentTurnLines.length) {
+      currentSpeaker = null;
+      currentTurnLines = [];
+      return;
+    }
+    elements.scriptPreview.append(createScriptTurn(currentSpeaker, currentTurnLines.join("\n")));
+    currentSpeaker = null;
+    currentTurnLines = [];
+  }
+
+  function flushParagraph() {
+    if (!currentParagraphLines.length) {
+      currentParagraphLines = [];
+      return;
+    }
+    elements.scriptPreview.append(createScriptParagraph(currentParagraphLines.join(" ")));
+    currentParagraphLines = [];
+  }
+
+  for (const rawLine of lines) {
+    const trimmed = rawLine.trim();
+    const speakerMatch = trimmed.match(/^(HOST_A|HOST_B):\s*(.*)$/);
+
+    if (speakerMatch) {
+      flushParagraph();
+      flushTurn();
+      currentSpeaker = speakerMatch[1];
+      currentTurnLines = speakerMatch[2] ? [speakerMatch[2]] : [];
+      continue;
+    }
+
+    if (!trimmed) {
+      flushTurn();
+      flushParagraph();
+      continue;
+    }
+
+    if (currentSpeaker) {
+      currentTurnLines.push(trimmed);
+    } else {
+      currentParagraphLines.push(trimmed);
+    }
+  }
+
+  flushTurn();
+  flushParagraph();
+
+  if (!elements.scriptPreview.childElementCount) {
+    elements.scriptPreview.append(createScriptPlaceholder("The script artifact is empty."));
+  }
+}
+
+function createScriptPlaceholder(text) {
+  const placeholder = document.createElement("p");
+  placeholder.className = "script-placeholder";
+  placeholder.textContent = text;
+  return placeholder;
+}
+
+function createScriptTurn(speaker, body) {
+  const turn = document.createElement("section");
+  turn.className = `script-turn ${speaker === "HOST_A" ? "script-turn-a" : "script-turn-b"}`;
+
+  const label = document.createElement("span");
+  label.className = "script-speaker";
+  label.textContent = speaker === "HOST_A" ? "Host A" : "Host B";
+
+  const paragraph = document.createElement("p");
+  paragraph.className = "script-line";
+  paragraph.textContent = body.trim();
+
+  turn.append(label, paragraph);
+  return turn;
+}
+
+function createScriptParagraph(text) {
+  const paragraph = document.createElement("p");
+  paragraph.className = "script-paragraph";
+  paragraph.textContent = text;
+  return paragraph;
+}
+
+function setPanelCollapsed(panel, collapsed) {
+  if (panel === "sources") {
+    state.sourcesCollapsed = collapsed;
+    writePanelPreference("sources", collapsed);
+  } else if (panel === "studio") {
+    state.studioCollapsed = collapsed;
+    writePanelPreference("studio", collapsed);
+  }
+  applyPanelState();
+}
+
+function applyPanelState() {
+  state.sourcesCollapsed = readPanelPreference("sources", state.sourcesCollapsed);
+  state.studioCollapsed = readPanelPreference("studio", state.studioCollapsed);
+
+  elements.sourcesPanel.classList.toggle("is-collapsed", state.sourcesCollapsed);
+  elements.studioPanel.classList.toggle("is-collapsed", state.studioCollapsed);
+  elements.workspaceGrid.classList.toggle("sources-collapsed", state.sourcesCollapsed);
+  elements.workspaceGrid.classList.toggle("studio-collapsed", state.studioCollapsed);
+
+  elements.sourcesCollapse.setAttribute("aria-expanded", String(!state.sourcesCollapsed));
+  elements.sourcesExpand.setAttribute("aria-expanded", String(!state.sourcesCollapsed));
+  elements.studioCollapse.setAttribute("aria-expanded", String(!state.studioCollapsed));
+  elements.studioExpand.setAttribute("aria-expanded", String(!state.studioCollapsed));
+}
+
+function readPanelPreference(panel, fallback) {
+  try {
+    const raw = window.localStorage.getItem(`podcast-anything:${panel}:collapsed`);
+    if (raw === null) {
+      return fallback;
+    }
+    return raw === "true";
+  } catch (error) {
+    return fallback;
+  }
+}
+
+function writePanelPreference(panel, collapsed) {
+  try {
+    window.localStorage.setItem(`podcast-anything:${panel}:collapsed`, String(collapsed));
+  } catch (error) {
+    return;
+  }
 }
 
 function formatBytes(bytes) {
