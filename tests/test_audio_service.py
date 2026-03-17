@@ -48,14 +48,6 @@ def _build_settings(tmp_path: Path) -> Settings:
         openai_api_key=None,
         openai_model="gpt-4o-mini",
         tts_provider="wave",
-        tts_default_voice="host_a",
-        tts_duo_voice="host_b",
-        piper_model_path=None,
-        piper_model_path_b=None,
-        piper_config_path=None,
-        piper_config_path_b=None,
-        piper_speaker_id=None,
-        piper_speaker_id_b=None,
         elevenlabs_api_key=None,
         elevenlabs_model_id="eleven_multilingual_v2",
         elevenlabs_output_format="mp3_44100_128",
@@ -136,29 +128,7 @@ Host: Welcome back. [Music fades out] Today we're talking about quantum mechanic
     ]
 
 
-def test_audio_service_does_not_apply_single_host_default_voice_to_duo(tmp_path: Path, monkeypatch) -> None:
-    provider = _CapturingProvider()
-    service = AudioService(_build_settings(tmp_path))
-    monkeypatch.setattr(service, "_build_provider", lambda provider_name: provider)
-
-    service.synthesize(
-        script_text="""
-HOST_A: Welcome back.
-HOST_B: Glad to be here.
-""",
-        script_mode="duo",
-        provider_name="piper",
-        voice_id=None,
-        voice_id_b=None,
-    )
-
-    assert provider.calls == [
-        ("Welcome back.", None, "host_a"),
-        ("Glad to be here.", "host_b", "host_b"),
-    ]
-
-
-def test_audio_service_uses_openai_voice_defaults_without_piper_model_paths(
+def test_audio_service_uses_openai_voice_defaults(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -167,7 +137,6 @@ def test_audio_service_uses_openai_voice_defaults_without_piper_model_paths(
     settings = replace(
         settings,
         tts_provider="openai",
-        tts_default_voice="./data/piper_voices/en_US-ryan-high.onnx",
         openai_tts_voice="marin",
         openai_tts_voice_b="cedar",
     )

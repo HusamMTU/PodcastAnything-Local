@@ -8,7 +8,6 @@ from podcast_anything_local.core.config import Settings
 from podcast_anything_local.providers.tts.base import SynthesizedAudio, TTSProvider, TTSProviderError
 from podcast_anything_local.providers.tts.elevenlabs import ElevenLabsTTSProvider
 from podcast_anything_local.providers.tts.openai import OpenAITTSProvider
-from podcast_anything_local.providers.tts.piper import PiperTTSProvider
 from podcast_anything_local.providers.tts.wave import WaveTTSProvider
 
 _DUO_LINE_RE = re.compile(r"^\s*(HOST_A|HOST_B)\s*:\s*(.*)$", re.IGNORECASE)
@@ -97,15 +96,6 @@ class AudioService:
         normalized = provider_name.strip().lower()
         if normalized == "wave":
             return WaveTTSProvider()
-        if normalized == "piper":
-            return PiperTTSProvider(
-                model_path=self._settings.piper_model_path,
-                model_path_b=self._settings.piper_model_path_b,
-                config_path=self._settings.piper_config_path,
-                config_path_b=self._settings.piper_config_path_b,
-                speaker_id=self._settings.piper_speaker_id,
-                speaker_id_b=self._settings.piper_speaker_id_b,
-            )
         if normalized == "elevenlabs":
             return ElevenLabsTTSProvider(
                 api_key=self._settings.elevenlabs_api_key,
@@ -124,8 +114,6 @@ class AudioService:
     def _resolve_single_voice(self, *, provider_name: str, voice_id: str | None) -> str | None:
         if provider_name == "wave":
             return voice_id or "host_a"
-        if provider_name == "piper":
-            return voice_id or self._settings.tts_default_voice
         if provider_name == "elevenlabs":
             return voice_id or self._settings.elevenlabs_voice_id
         if provider_name == "openai":
@@ -141,8 +129,6 @@ class AudioService:
     ) -> tuple[str | None, str | None]:
         if provider_name == "wave":
             return voice_id or "host_a", voice_id_b or "host_b"
-        if provider_name == "piper":
-            return voice_id, voice_id_b or self._settings.tts_duo_voice
         if provider_name == "elevenlabs":
             return voice_id or self._settings.elevenlabs_voice_id, (
                 voice_id_b or self._settings.elevenlabs_voice_id_b

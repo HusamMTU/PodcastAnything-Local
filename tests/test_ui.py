@@ -21,15 +21,7 @@ def _build_settings(tmp_path: Path) -> Settings:
         openai_base_url="https://api.openai.com/v1",
         openai_api_key=None,
         openai_model="gpt-4o-mini",
-        tts_provider="piper",
-        tts_default_voice=None,
-        tts_duo_voice=None,
-        piper_model_path="./data/piper_voices/en_US-lessac-high.onnx",
-        piper_model_path_b=None,
-        piper_config_path="./data/piper_voices/en_US-lessac-high.onnx.json",
-        piper_config_path_b=None,
-        piper_speaker_id=None,
-        piper_speaker_id_b=None,
+        tts_provider="openai",
         elevenlabs_api_key=None,
         elevenlabs_model_id="eleven_multilingual_v2",
         elevenlabs_output_format="mp3_44100_128",
@@ -71,10 +63,9 @@ def test_config_exposes_current_defaults(tmp_path: Path) -> None:
         assert payload["app_name"] == "Podcast Anything Local Test"
         assert payload["default_web_extractor"] == "auto"
         assert payload["script_writer"] == "openai"
-        assert payload["default_tts_provider"] == "piper"
+        assert payload["default_tts_provider"] == "openai"
         assert "auto" in payload["supported_web_extractors"]
         assert "bs4" in payload["supported_web_extractors"]
-        assert "piper" in payload["supported_tts_providers"]
         assert "openai" in payload["supported_tts_providers"]
         assert "wave" not in payload["supported_tts_providers"]
 

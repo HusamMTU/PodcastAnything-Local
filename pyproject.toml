@@ -23,9 +23,6 @@ dev = [
   "httpx>=0.28.1",
   "pytest>=8.3.4",
 ]
-piper = [
-  "piper-tts>=1.4.1",
-]
 
 [build-system]
 requires = ["hatchling"]

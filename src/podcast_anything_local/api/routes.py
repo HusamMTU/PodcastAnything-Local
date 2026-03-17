@@ -32,7 +32,7 @@ def app_config(request: Request) -> AppConfigResponse:
         default_tts_provider=settings.tts_provider,
         default_style=settings.rewrite_style,
         supported_web_extractors=["auto", "trafilatura", "bs4"],
-        supported_tts_providers=["piper", "openai", "elevenlabs"],
+        supported_tts_providers=["openai", "elevenlabs"],
     )
 
 

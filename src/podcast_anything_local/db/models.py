@@ -16,7 +16,7 @@ class CreateJobInput:
     title: str | None = None
     style: str = "podcast"
     script_mode: str = "single"
-    tts_provider: str = "wave"
+    tts_provider: str = "openai"
     voice_id: str | None = None
     voice_id_b: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
