@@ -52,14 +52,6 @@ class Settings:
     openai_api_key: str | None
     openai_model: str
     tts_provider: str
-    tts_default_voice: str | None
-    tts_duo_voice: str | None
-    piper_model_path: str | None
-    piper_model_path_b: str | None
-    piper_config_path: str | None
-    piper_config_path_b: str | None
-    piper_speaker_id: str | None
-    piper_speaker_id_b: str | None
     elevenlabs_api_key: str | None
     elevenlabs_model_id: str
     elevenlabs_output_format: str
@@ -85,9 +77,9 @@ def load_settings() -> Settings:
     database_path = database_path.resolve()
     jobs_dir = Path(_read_env("JOBS_DIR", str(data_dir / "jobs"))).expanduser().resolve()
 
-    tts_provider = _read_env("TTS_PROVIDER", "wave").lower()
-    if tts_provider not in {"wave", "piper", "elevenlabs", "openai"}:
-        raise ConfigError("TTS_PROVIDER must be one of: wave, piper, elevenlabs, openai")
+    tts_provider = _read_env("TTS_PROVIDER", "openai").lower()
+    if tts_provider not in {"wave", "elevenlabs", "openai"}:
+        raise ConfigError("TTS_PROVIDER must be one of: wave, elevenlabs, openai")
 
     web_extractor = _read_env("WEB_EXTRACTOR", "auto").lower()
     if web_extractor not in {"auto", "trafilatura", "bs4"}:
@@ -111,14 +103,6 @@ def load_settings() -> Settings:
         openai_api_key=_optional_env("OPENAI_API_KEY"),
         openai_model=_read_env("OPENAI_MODEL", "gpt-4o-mini"),
         tts_provider=tts_provider,
-        tts_default_voice=_optional_env("TTS_DEFAULT_VOICE"),
-        tts_duo_voice=_optional_env("TTS_DUO_VOICE"),
-        piper_model_path=_optional_env("PIPER_MODEL_PATH"),
-        piper_model_path_b=_optional_env("PIPER_MODEL_PATH_B"),
-        piper_config_path=_optional_env("PIPER_CONFIG_PATH"),
-        piper_config_path_b=_optional_env("PIPER_CONFIG_PATH_B"),
-        piper_speaker_id=_optional_env("PIPER_SPEAKER_ID"),
-        piper_speaker_id_b=_optional_env("PIPER_SPEAKER_ID_B"),
         elevenlabs_api_key=_optional_env("ELEVENLABS_API_KEY"),
         elevenlabs_model_id=_read_env("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2"),
         elevenlabs_output_format=_read_env("ELEVENLABS_OUTPUT_FORMAT", "mp3_44100_128"),

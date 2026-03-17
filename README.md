@@ -13,7 +13,7 @@ produce a rewritten script, an episode title, and synthesized audio.
 The project is built for local or self-hosted use. The default stack is:
 
 - `OpenAI` for podcast script writing
-- `Piper` for local voice generation
+- `OpenAI` for podcast voice generation
 
 Documents with layout or slide structure go through a multimodal planning path.
 `pdf`, `docx`, and `pptx` inputs are analyzed as page-based documents before the
@@ -26,7 +26,7 @@ final script is written, and `pptx` slide notes are included in that analysis.
 - [Artifacts](#artifacts)
 - [Quick Start](#quick-start)
   - [1. Create the environment](#1-create-the-environment)
-  - [2. Install Piper and download voices](#2-install-piper-and-download-voices)
+  - [2. Review TTS defaults](#2-review-tts-defaults)
   - [3. Start the app](#3-start-the-app)
   - [4. Submit a job](#4-submit-a-job)
 - [Usage](#usage)
@@ -51,7 +51,7 @@ final script is written, and `pptx` slide notes are included in that analysis.
 | PPTX upload | Yes | Extracts slide text and notes, then normalizes into `normalized.pdf` |
 | Podcast modes | `single`, `duo` | Targets about 2-4 minutes of audio |
 | Script writer | OpenAI | Current built-in rewrite provider |
-| Voice generators | Piper, OpenAI, ElevenLabs | Piper is the default local option; OpenAI is the simplest hosted option |
+| Voice generators | OpenAI, ElevenLabs | OpenAI is the default option; ElevenLabs is the higher-quality alternate |
 | Interfaces | Web UI, API, CLI | All use the same local job store |
 | Output artifacts | Yes | `script.txt`, `audio.wav`, `metadata.json`, plus planning artifacts for document jobs |
 
@@ -140,13 +140,23 @@ Then add your OpenAI key to `.env`:
 OPENAI_API_KEY=your_key_here
 ```
 
-### 2. Install Piper and download voices
+### 2. Review TTS defaults
 
 ```bash
-make setup-piper
-make download-piper-duo-voices
-make test-piper-local
-make test-piper-local-duo
+TTS_PROVIDER=openai
+OPENAI_TTS_MODEL=gpt-4o-mini-tts
+OPENAI_TTS_VOICE=marin
+OPENAI_TTS_VOICE_B=cedar
+OPENAI_TTS_RESPONSE_FORMAT=wav
+```
+
+If you want to use ElevenLabs instead, set:
+
+```bash
+TTS_PROVIDER=elevenlabs
+ELEVENLABS_API_KEY=your_key_here
+ELEVENLABS_VOICE_ID=your_voice_id_here
+ELEVENLABS_VOICE_ID_B=your_second_voice_id_here
 ```
 
 ### 3. Start the app
@@ -275,26 +285,19 @@ OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
 
-TTS_PROVIDER=piper
-TTS_DEFAULT_VOICE=./data/piper_voices/en_US-ryan-high.onnx
+TTS_PROVIDER=openai
 OPENAI_TTS_MODEL=gpt-4o-mini-tts
 OPENAI_TTS_VOICE=marin
 OPENAI_TTS_VOICE_B=cedar
 OPENAI_TTS_RESPONSE_FORMAT=wav
-PIPER_MODEL_PATH=./data/piper_voices/en_US-lessac-high.onnx
-PIPER_CONFIG_PATH=./data/piper_voices/en_US-lessac-high.onnx.json
-PIPER_MODEL_PATH_B=./data/piper_voices/en_US-ryan-high.onnx
-PIPER_CONFIG_PATH_B=./data/piper_voices/en_US-ryan-high.onnx.json
-PIPER_SPEAKER_ID=
-PIPER_SPEAKER_ID_B=
 ELEVENLABS_VOICE_ID=
 ELEVENLABS_VOICE_ID_B=
 ```
 
 In this setup:
 
-- single-host podcasts default to `ryan-high`
-- duo mode uses `lessac-high` for `HOST_A` and `ryan-high` for `HOST_B`
+- single-host podcasts default to OpenAI voice `marin`
+- duo mode uses OpenAI voices `marin` for `HOST_A` and `cedar` for `HOST_B`
 
 Important settings:
 
@@ -304,8 +307,6 @@ Important settings:
 - `TTS_PROVIDER`
 - `OPENAI_TTS_MODEL`
 - `OPENAI_TTS_VOICE`
-- `PIPER_MODEL_PATH`
-- `PIPER_CONFIG_PATH`
 - `DATA_DIR`
 
 Notes:
@@ -318,7 +319,7 @@ Notes:
 - if you want hosted TTS with the same vendor as script writing, set
   `TTS_PROVIDER=openai`; `OPENAI_TTS_RESPONSE_FORMAT=wav` is recommended and is
   required for reliable duo turn joining
-- if you want hosted TTS instead of local Piper, set `TTS_PROVIDER=elevenlabs`
+- if you want ElevenLabs instead of OpenAI TTS, set `TTS_PROVIDER=elevenlabs`
   and fill in `ELEVENLABS_API_KEY` plus `ELEVENLABS_VOICE_ID`
 
 OpenAI is the only built-in podcast script writer in this repo. The rewrite
@@ -343,8 +344,8 @@ This repo includes two GitHub Actions workflows:
   and `3.13`.
 - `Integration Hosted`
   Runs on `workflow_dispatch` and nightly. It runs a real OpenAI rewrite smoke
-  test and a real Piper smoke test. To enable the OpenAI job, add the
-  `OPENAI_API_KEY` GitHub Actions secret to the repository.
+  test. To enable it, add the `OPENAI_API_KEY` GitHub Actions secret to the
+  repository.
 
 If you want to mirror the required CI locally:
 
@@ -355,14 +356,11 @@ make test-ci
 Verified locally:
 
 - `make test`
-- `make test-piper-local`
 - `make test-openai-live MODEL=gpt-4o-mini`
 
 ## Troubleshooting
 
 - If `make run` fails, make sure you ran `make setup` first.
 - If `.env` changes are not reflected, restart the API process.
-- If `make test-piper-local` fails, check that the Piper voice files exist under
-  `data/piper_voices/`.
 - If `make test-openai-live` fails, confirm `OPENAI_API_KEY` is set and the
   selected `OPENAI_MODEL` is available to your account.
