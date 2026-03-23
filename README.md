@@ -155,6 +155,7 @@ If you want to use ElevenLabs instead, set:
 ```bash
 TTS_PROVIDER=elevenlabs
 ELEVENLABS_API_KEY=your_key_here
+ELEVENLABS_DIALOGUE_MODEL_ID=eleven_v3
 ELEVENLABS_VOICE_ID=your_voice_id_here
 ELEVENLABS_VOICE_ID_B=your_second_voice_id_here
 ```
@@ -321,6 +322,9 @@ Notes:
   required for reliable duo turn joining
 - if you want ElevenLabs instead of OpenAI TTS, set `TTS_PROVIDER=elevenlabs`
   and fill in `ELEVENLABS_API_KEY` plus `ELEVENLABS_VOICE_ID`
+- ElevenLabs `single` uses the standard text-to-speech endpoint
+- ElevenLabs `duo` uses the dedicated text-to-dialogue endpoint with
+  `ELEVENLABS_DIALOGUE_MODEL_ID`, which works better on plans like `Creator`
 
 OpenAI is the only built-in podcast script writer in this repo. The rewrite
 provider boundary is still isolated in code so future providers such as Grok or
@@ -357,6 +361,8 @@ Verified locally:
 
 - `make test`
 - `make test-openai-live MODEL=gpt-4o-mini`
+- `./.venv/bin/python -m pytest tests/test_tts_elevenlabs.py`
+- `make test-elevenlabs-live`
 
 ## Troubleshooting
 
@@ -364,3 +370,5 @@ Verified locally:
 - If `.env` changes are not reflected, restart the API process.
 - If `make test-openai-live` fails, confirm `OPENAI_API_KEY` is set and the
   selected `OPENAI_MODEL` is available to your account.
+- If ElevenLabs duo synthesis fails, confirm `ELEVENLABS_VOICE_ID_B` is set and
+  that your account can access the `ELEVENLABS_DIALOGUE_MODEL_ID` you selected.
