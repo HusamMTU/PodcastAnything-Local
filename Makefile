@@ -1,6 +1,6 @@
 PYTHON ?= python3
 
-.PHONY: setup test-openai-live run run-job test test-ci
+.PHONY: setup test-openai-live test-elevenlabs-live run run-job test test-ci
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -8,6 +8,9 @@ setup:
 
 test-openai-live:
 	./.venv/bin/python scripts/test_openai_live.py $(if $(MODEL),--model $(MODEL),)
+
+test-elevenlabs-live:
+	./.venv/bin/python scripts/test_elevenlabs_live.py $(if $(DUO),--duo,)
 
 run:
 	./.venv/bin/uvicorn podcast_anything_local.main:app --reload

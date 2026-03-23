@@ -59,6 +59,12 @@ class AudioService:
     ) -> SynthesizedAudio:
         resolved_provider_name = provider_name or self._settings.tts_provider
         normalized_provider_name = resolved_provider_name.strip().lower()
+        if script_mode == "duo" and normalized_provider_name == "elevenlabs":
+            return self._synthesize_elevenlabs_duo(
+                script_text=script_text,
+                voice_id=voice_id,
+                voice_id_b=voice_id_b,
+            )
         provider = self._build_provider(normalized_provider_name)
         if script_mode == "duo":
             host_a_voice, host_b_voice = self._resolve_duo_voices(
@@ -92,6 +98,35 @@ class AudioService:
             raise TTSProviderError("No spoken text remained after cleaning the single-host script.")
         return provider.synthesize(text=spoken_text, voice_id=host_a_voice, speaker="host_a")
 
+    def _synthesize_elevenlabs_duo(
+        self,
+        *,
+        script_text: str,
+        voice_id: str | None,
+        voice_id_b: str | None,
+    ) -> SynthesizedAudio:
+        provider = ElevenLabsTTSProvider(
+            api_key=self._settings.elevenlabs_api_key,
+            model_id=self._settings.elevenlabs_model_id,
+            dialogue_model_id=self._settings.elevenlabs_dialogue_model_id,
+            output_format=self._settings.elevenlabs_output_format,
+        )
+        host_a_voice, host_b_voice = self._resolve_duo_voices(
+            provider_name="elevenlabs",
+            voice_id=voice_id,
+            voice_id_b=voice_id_b,
+        )
+        turns = _parse_duo_turns(script_text)
+        if not turns:
+            raise TTSProviderError(
+                "script_mode=duo requires script lines prefixed with HOST_A: or HOST_B:."
+            )
+        return provider.synthesize_dialogue(
+            turns=turns,
+            voice_id_a=host_a_voice,
+            voice_id_b=host_b_voice,
+        )
+
     def _build_provider(self, provider_name: str) -> TTSProvider:
         normalized = provider_name.strip().lower()
         if normalized == "wave":
@@ -100,6 +135,7 @@ class AudioService:
             return ElevenLabsTTSProvider(
                 api_key=self._settings.elevenlabs_api_key,
                 model_id=self._settings.elevenlabs_model_id,
+                dialogue_model_id=self._settings.elevenlabs_dialogue_model_id,
                 output_format=self._settings.elevenlabs_output_format,
             )
         if normalized == "openai":

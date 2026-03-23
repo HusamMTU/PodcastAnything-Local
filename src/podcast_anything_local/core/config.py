@@ -54,7 +54,8 @@ class Settings:
     tts_provider: str
     elevenlabs_api_key: str | None
     elevenlabs_model_id: str
-    elevenlabs_output_format: str
+    elevenlabs_dialogue_model_id: str = "eleven_v3"
+    elevenlabs_output_format: str = "mp3_44100_128"
     openai_tts_model: str = "gpt-4o-mini-tts"
     openai_tts_voice: str = "marin"
     openai_tts_voice_b: str = "cedar"
@@ -105,6 +106,7 @@ def load_settings() -> Settings:
         tts_provider=tts_provider,
         elevenlabs_api_key=_optional_env("ELEVENLABS_API_KEY"),
         elevenlabs_model_id=_read_env("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2"),
+        elevenlabs_dialogue_model_id=_read_env("ELEVENLABS_DIALOGUE_MODEL_ID", "eleven_v3"),
         elevenlabs_output_format=_read_env("ELEVENLABS_OUTPUT_FORMAT", "mp3_44100_128"),
         openai_tts_model=_read_env("OPENAI_TTS_MODEL", "gpt-4o-mini-tts"),
         openai_tts_voice=_read_env("OPENAI_TTS_VOICE", "marin"),

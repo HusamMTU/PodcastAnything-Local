@@ -8,6 +8,31 @@ import wave
 from podcast_anything_local.providers.tts.base import SynthesizedAudio, TTSProviderError
 
 
+def wrap_pcm_as_wav(
+    pcm_data: bytes,
+    *,
+    sample_rate: int,
+    file_name: str = "audio.wav",
+    channels: int = 1,
+    sample_width: int = 2,
+) -> SynthesizedAudio:
+    if not pcm_data:
+        raise TTSProviderError("No PCM audio data was provided.")
+
+    output = io.BytesIO()
+    with wave.open(output, "wb") as wav_file:
+        wav_file.setnchannels(channels)
+        wav_file.setsampwidth(sample_width)
+        wav_file.setframerate(sample_rate)
+        wav_file.writeframes(pcm_data)
+
+    return SynthesizedAudio(
+        data=output.getvalue(),
+        file_name=file_name,
+        content_type="audio/wav",
+    )
+
+
 def join_wav_segments(
     segments: list[SynthesizedAudio],
     *,

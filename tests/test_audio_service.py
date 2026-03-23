@@ -15,6 +15,7 @@ from podcast_anything_local.services.audio import (
 class _CapturingProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str | None, str | None]] = []
+        self.dialogue_calls: list[tuple[list[tuple[str, str]], str | None, str | None]] = []
 
     def synthesize(
         self,
@@ -33,6 +34,20 @@ class _CapturingProvider:
     def join(self, segments: list[SynthesizedAudio]) -> SynthesizedAudio:
         return segments[0]
 
+    def synthesize_dialogue(
+        self,
+        *,
+        turns: list[tuple[str, str]],
+        voice_id_a: str | None,
+        voice_id_b: str | None,
+    ) -> SynthesizedAudio:
+        self.dialogue_calls.append((turns, voice_id_a, voice_id_b))
+        return SynthesizedAudio(
+            data=b"ID3fake",
+            file_name="audio.mp3",
+            content_type="audio/mpeg",
+        )
+
 
 def _build_settings(tmp_path: Path) -> Settings:
     data_dir = tmp_path / "data"
@@ -50,6 +65,7 @@ def _build_settings(tmp_path: Path) -> Settings:
         tts_provider="wave",
         elevenlabs_api_key=None,
         elevenlabs_model_id="eleven_multilingual_v2",
+        elevenlabs_dialogue_model_id="eleven_v3",
         elevenlabs_output_format="mp3_44100_128",
     )
 
@@ -158,3 +174,43 @@ HOST_B: Glad to be here.
         ("Welcome back.", "marin", "host_a"),
         ("Glad to be here.", "cedar", "host_b"),
     ]
+
+
+def test_audio_service_uses_elevenlabs_voice_defaults(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    provider = _CapturingProvider()
+    settings = _build_settings(tmp_path)
+    settings = replace(
+        settings,
+        tts_provider="elevenlabs",
+        elevenlabs_voice_id="voice-a",
+        elevenlabs_voice_id_b="voice-b",
+    )
+    service = AudioService(settings)
+    monkeypatch.setattr(
+        "podcast_anything_local.services.audio.ElevenLabsTTSProvider",
+        lambda **kwargs: provider,
+    )
+
+    audio = service.synthesize(
+        script_text="""
+HOST_A: Welcome back.
+HOST_B: Glad to be here.
+""",
+        script_mode="duo",
+        provider_name="elevenlabs",
+        voice_id=None,
+        voice_id_b=None,
+    )
+
+    assert provider.calls == []
+    assert provider.dialogue_calls == [
+        (
+            [("HOST_A", "Welcome back."), ("HOST_B", "Glad to be here.")],
+            "voice-a",
+            "voice-b",
+        )
+    ]
+    assert audio.file_name == "audio.mp3"
