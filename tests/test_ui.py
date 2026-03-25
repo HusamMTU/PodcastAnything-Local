@@ -175,6 +175,8 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "setSourcesView" in js_response.text
         assert "renderScriptPreview" in js_response.text
         assert "createScriptTurn" in js_response.text
+        assert "shouldLoadArtifacts" in js_response.text
+        assert '["rewriting", "synthesizing"].includes(job.current_stage || "")' in js_response.text
         assert "jobTitleShell" in js_response.text
         assert "Generating title..." not in js_response.text
         assert "setPanelCollapsed" in js_response.text

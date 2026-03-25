@@ -234,7 +234,7 @@ async function loadJob(jobId, options = {}) {
     state.currentJobId = jobId;
     renderJob(job);
 
-    if (job.status === "completed" || includeArtifacts) {
+    if (shouldLoadArtifacts(job, { includeArtifacts })) {
       await loadArtifacts(jobId);
     }
 
@@ -250,6 +250,15 @@ async function loadJob(jobId, options = {}) {
     }
     return null;
   }
+}
+
+function shouldLoadArtifacts(job, options = {}) {
+  const { includeArtifacts = false } = options;
+  if (includeArtifacts || job.status === "completed") {
+    return true;
+  }
+
+  return ["rewriting", "synthesizing"].includes(job.current_stage || "");
 }
 
 function renderJob(job) {
