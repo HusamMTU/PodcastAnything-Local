@@ -111,7 +111,6 @@
                   </div>
                   <div class="subsection-actions">
                     <button id="retry-button" class="secondary-button" type="button">Retry</button>
-                    <button id="refresh-jobs-button" class="ghost-button" type="button">Refresh</button>
                   </div>
                 </div>
                 <div id="recent-jobs" class="recent-jobs"></div>
@@ -208,10 +207,6 @@
               <div>
                 <p class="eyebrow">Controls</p>
                 <h2>Studio</h2>
-                <div class="studio-summary">
-                  <span id="settings-mode-summary" class="summary-pill">Single host</span>
-                  <span id="settings-voice-summary" class="summary-pill">OpenAI</span>
-                </div>
               </div>
               <button
                 id="studio-collapse"
@@ -233,16 +228,14 @@
                   <div class="input-group">
                     <label for="script-mode">Podcast mode</label>
                     <select id="script-mode" name="script_mode" form="job-form">
+                      <option value="duo" selected>Two hosts</option>
                       <option value="single">Single host</option>
-                      <option value="duo">Two hosts</option>
                     </select>
                   </div>
 
                   <div class="input-group">
                     <label for="tts-provider">Audio generator</label>
-                    <select id="tts-provider" name="tts_provider" form="job-form">
-                      <option value="">Use default</option>
-                    </select>
+                    <select id="tts-provider" name="tts_provider" form="job-form"></select>
                   </div>
                 </div>
               </section>
@@ -251,7 +244,7 @@
                 <summary class="artifact-summary">
                   <div>
                     <h3>Artifacts</h3>
-                    <p class="hint">Inspect the files saved for the current job.</p>
+                    <p id="artifact-hint" class="hint">No artifacts yet. Run a job or select a past one.</p>
                   </div>
                 </summary>
                 <ul id="artifact-list" class="artifact-list"></ul>

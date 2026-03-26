@@ -36,8 +36,6 @@ const elements = {
   },
   scriptMode: document.getElementById("script-mode"),
   ttsProvider: document.getElementById("tts-provider"),
-  settingsModeSummary: document.getElementById("settings-mode-summary"),
-  settingsVoiceSummary: document.getElementById("settings-voice-summary"),
   formMessage: document.getElementById("form-message"),
   submitButton: document.getElementById("submit-button"),
   jobDetails: document.getElementById("job-details"),
@@ -46,13 +44,13 @@ const elements = {
   jobStageSpinner: document.getElementById("job-stage-spinner"),
   jobStage: document.getElementById("job-stage"),
   jobError: document.getElementById("job-error"),
+  artifactHint: document.getElementById("artifact-hint"),
   scriptPreview: document.getElementById("script-preview"),
   scriptDownload: document.getElementById("script-download"),
   audioPlayer: document.getElementById("audio-player"),
   audioDownload: document.getElementById("audio-download"),
   artifactList: document.getElementById("artifact-list"),
   recentJobs: document.getElementById("recent-jobs"),
-  refreshJobsButton: document.getElementById("refresh-jobs-button"),
   retryButton: document.getElementById("retry-button"),
   modeButtons: Array.from(document.querySelectorAll("[data-source-mode]")),
 };
@@ -64,10 +62,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
 function bindEvents() {
   elements.jobForm.addEventListener("submit", onSubmitJob);
-  elements.refreshJobsButton.addEventListener("click", () => void refreshJobs());
   elements.retryButton.addEventListener("click", () => void retryCurrentJob());
-  elements.scriptMode.addEventListener("change", syncSelectedSettingsSummary);
-  elements.ttsProvider.addEventListener("change", syncSelectedSettingsSummary);
   elements.sourcesCollapse.addEventListener("click", () => setPanelCollapsed("sources", true));
   elements.sourcesExpand.addEventListener("click", () => setPanelCollapsed("sources", false));
   elements.studioCollapse.addEventListener("click", () => setPanelCollapsed("studio", true));
@@ -90,6 +85,7 @@ function bindEvents() {
 }
 
 async function initialize() {
+  updateArtifactHint();
   await Promise.all([loadConfig(), refreshJobs()]);
 }
 
@@ -98,16 +94,21 @@ async function loadConfig() {
     const payload = await fetchJson("/config");
     state.config = payload;
     fillSelect(elements.ttsProvider, payload.supported_tts_providers);
-    syncSelectedSettingsSummary();
   } catch (error) {}
 }
 
 function fillSelect(selectElement, values) {
+  selectElement.replaceChildren();
   for (const value of values || []) {
     const option = document.createElement("option");
     option.value = value;
     option.textContent = formatProviderName(value);
     selectElement.append(option);
+  }
+
+  const preferredValue = (values || []).includes("openai") ? "openai" : values?.[0] || "";
+  if (preferredValue) {
+    selectElement.value = preferredValue;
   }
 }
 
@@ -137,6 +138,10 @@ function setSourcesView(view) {
 
   for (const [panelView, panel] of Object.entries(elements.sourcesViewPanels)) {
     panel.classList.toggle("is-hidden", panelView !== state.sourcesView);
+  }
+
+  if (state.sourcesView === "history") {
+    void refreshJobs();
   }
 }
 
@@ -219,6 +224,7 @@ async function activateJobWithSeed(jobId, seedJob) {
   state.previewSegmentUrls = [];
   state.previewNextIndex = 0;
   state.previewPlaybackWanted = false;
+  updateArtifactHint();
 
   const job = await loadJob(jobId, { includeArtifacts: true });
   if (job && job.status !== "completed" && job.status !== "failed") {
@@ -278,8 +284,8 @@ function shouldLoadArtifacts(job, options = {}) {
 }
 
 function renderJob(job) {
-  elements.scriptMode.value = job.script_mode || elements.scriptMode.value;
-  elements.ttsProvider.value = job.tts_provider || "";
+  elements.scriptMode.value = job.script_mode || "duo";
+  elements.ttsProvider.value = job.tts_provider || state.config?.default_tts_provider || "openai";
   if (job.title) {
     elements.jobTitleValue.textContent = job.title;
     elements.jobTitleShell.classList.remove("is-hidden");
@@ -288,7 +294,6 @@ function renderJob(job) {
     elements.jobTitleShell.classList.add("is-hidden");
   }
   elements.jobStage.textContent = job.current_stage || "queued";
-  syncSelectedSettingsSummary();
   elements.jobStageSpinner.classList.toggle(
     "is-hidden",
     !["queued", "running"].includes(job.status || ""),
@@ -320,7 +325,9 @@ function renderArtifactList(artifacts) {
   if (!visibleArtifacts.length) {
     const empty = document.createElement("li");
     empty.className = "hint";
-    empty.textContent = "No artifacts available yet.";
+    empty.textContent = hasArtifactContext()
+      ? "No artifacts available yet."
+      : "No artifacts yet. Run a job or select a past one.";
     elements.artifactList.append(empty);
     return;
   }
@@ -344,6 +351,16 @@ function renderArtifactList(artifacts) {
     item.append(label, link);
     elements.artifactList.append(item);
   }
+}
+
+function hasArtifactContext() {
+  return Boolean(state.currentJobId);
+}
+
+function updateArtifactHint() {
+  elements.artifactHint.textContent = hasArtifactContext()
+    ? "Inspect the files saved for the current job."
+    : "No artifacts yet. Run a job or select a past one.";
 }
 
 async function loadScriptArtifact(artifacts) {
@@ -711,19 +728,6 @@ function formatProviderName(value) {
     return "Wave";
   }
   return value || "-";
-}
-
-function getSelectedVoiceProviderName() {
-  const selected = elements.ttsProvider.value || state.config?.default_tts_provider || "";
-  return formatProviderName(selected);
-}
-
-function syncSelectedSettingsSummary() {
-  const modeLabel = formatScriptMode(elements.scriptMode.value);
-  const voiceLabel = getSelectedVoiceProviderName();
-
-  elements.settingsModeSummary.textContent = modeLabel;
-  elements.settingsVoiceSummary.textContent = voiceLabel;
 }
 
 function renderScriptPreview(text) {
