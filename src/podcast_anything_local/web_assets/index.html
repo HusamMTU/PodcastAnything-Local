@@ -237,6 +237,40 @@
                     <label for="tts-provider">Audio generator</label>
                     <select id="tts-provider" name="tts_provider" form="job-form"></select>
                   </div>
+
+                  <div class="input-group form-span-full">
+                    <label for="podcast-length">Episode length</label>
+                    <input id="podcast-length" name="podcast_length" type="hidden" form="job-form" value="medium" />
+                    <div class="length-switch" role="tablist" aria-label="Episode length">
+                      <button
+                        type="button"
+                        class="length-button"
+                        data-podcast-length="short"
+                        aria-pressed="false"
+                      >
+                        <span class="length-label">Short</span>
+                        <span class="length-range">2-3 min</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="length-button is-active"
+                        data-podcast-length="medium"
+                        aria-pressed="true"
+                      >
+                        <span class="length-label">Medium</span>
+                        <span class="length-range">4-5 min</span>
+                      </button>
+                      <button
+                        type="button"
+                        class="length-button"
+                        data-podcast-length="long"
+                        aria-pressed="false"
+                      >
+                        <span class="length-label">Long</span>
+                        <span class="length-range">6-10 min</span>
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </section>
 

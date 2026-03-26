@@ -117,6 +117,7 @@ class PipelineService:
                     document_map=analysis.document_map,
                     title=job.title,
                     script_mode=job.script_mode,
+                    podcast_length=job.podcast_length,
                 )
                 rewrite_source_text = self._document_service.build_rewrite_source_text(
                     analysis=analysis,
@@ -164,6 +165,7 @@ class PipelineService:
                 style=job.style,
                 source_type=source_type,
                 script_mode=job.script_mode,
+                podcast_length=job.podcast_length,
             )
             generated_title = job.title
             title_metadata: dict[str, object] = {}
@@ -236,6 +238,7 @@ class PipelineService:
                         "title": final_job.title,
                         "style": final_job.style,
                         "script_mode": final_job.script_mode,
+                        "podcast_length": final_job.podcast_length,
                         "tts_provider": final_job.tts_provider,
                         "metadata": final_job.metadata,
                     },

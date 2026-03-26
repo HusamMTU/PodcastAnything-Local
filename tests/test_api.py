@@ -198,6 +198,7 @@ def test_create_job_from_url_runs_pipeline(tmp_path: Path, monkeypatch) -> None:
             json={
                 "source_url": "https://example.com/article",
                 "script_mode": "duo",
+                "podcast_length": "long",
             },
         )
 
@@ -205,10 +206,12 @@ def test_create_job_from_url_runs_pipeline(tmp_path: Path, monkeypatch) -> None:
         payload = response.json()
         assert payload["status"] == "queued"
         assert payload["script_mode"] == "duo"
+        assert payload["podcast_length"] == "long"
 
         terminal_payload = _wait_for_terminal_job_state(client, payload["job_id"])
         assert terminal_payload["status"] == "completed"
         assert terminal_payload["title"] == "Local Podcast Conversation"
+        assert terminal_payload["podcast_length"] == "long"
         assert terminal_payload["audio_artifact"].endswith("audio.wav")
         assert terminal_payload["metadata"]["rewrite_input_char_count"] == len(source_text)
         assert terminal_payload["metadata"]["rewrite_input_truncated"] is False
@@ -242,6 +245,7 @@ def test_create_job_from_pasted_text(tmp_path: Path, monkeypatch) -> None:
         payload = response.json()
         assert payload["source_kind"] == "text"
         assert payload["source_file_name"] == "pasted_text.txt"
+        assert payload["podcast_length"] == "medium"
 
         terminal_payload = _wait_for_terminal_job_state(client, payload["job_id"])
         assert terminal_payload["status"] == "completed"

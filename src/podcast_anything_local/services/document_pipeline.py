@@ -270,12 +270,14 @@ class MultimodalDocumentService:
         document_map: dict[str, object],
         title: str | None,
         script_mode: str,
+        podcast_length: str,
     ) -> dict[str, object]:
         provider = self._provider_factory()
         return provider.build_podcast_plan(
             document_map=document_map,
             title=title,
             script_mode=script_mode,
+            podcast_length=podcast_length,
         )
 
     def build_rewrite_source_text(

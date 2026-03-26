@@ -3,15 +3,52 @@
 from __future__ import annotations
 
 import json
+from dataclasses import dataclass
 
 from podcast_anything_local.providers.rewrite.base import RewriteProviderError
 
 ESTIMATED_SPOKEN_WPM = 120
-TARGET_AUDIO_MINUTES_MIN = 2
-TARGET_AUDIO_MINUTES_MAX = 4
-MIN_SPOKEN_WORDS = ESTIMATED_SPOKEN_WPM * TARGET_AUDIO_MINUTES_MIN
-MAX_SPOKEN_WORDS = ESTIMATED_SPOKEN_WPM * TARGET_AUDIO_MINUTES_MAX
 TITLE_INPUT_MAX_CHARS = 4_000
+DEFAULT_PODCAST_LENGTH = "medium"
+
+
+@dataclass(frozen=True, slots=True)
+class PodcastLengthTarget:
+    preset: str
+    min_minutes: int
+    max_minutes: int
+
+    @property
+    def min_spoken_words(self) -> int:
+        return ESTIMATED_SPOKEN_WPM * self.min_minutes
+
+    @property
+    def max_spoken_words(self) -> int:
+        return ESTIMATED_SPOKEN_WPM * self.max_minutes
+
+    @property
+    def duration_label(self) -> str:
+        return f"{self.min_minutes}-{self.max_minutes} minutes"
+
+
+_PODCAST_LENGTH_TARGETS = {
+    "short": PodcastLengthTarget("short", 2, 3),
+    "medium": PodcastLengthTarget("medium", 4, 5),
+    "long": PodcastLengthTarget("long", 6, 10),
+}
+SUPPORTED_PODCAST_LENGTHS = tuple(_PODCAST_LENGTH_TARGETS.keys())
+MAX_SPOKEN_WORDS = _PODCAST_LENGTH_TARGETS[DEFAULT_PODCAST_LENGTH].max_spoken_words
+
+
+def get_podcast_length_target(podcast_length: str | None) -> PodcastLengthTarget:
+    normalized = (podcast_length or DEFAULT_PODCAST_LENGTH).strip().lower()
+    try:
+        return _PODCAST_LENGTH_TARGETS[normalized]
+    except KeyError as exc:
+        supported = ", ".join(SUPPORTED_PODCAST_LENGTHS)
+        raise RewriteProviderError(
+            f"podcast_length must be one of: {supported}"
+        ) from exc
 
 
 def build_podcast_prompt(
@@ -21,7 +58,9 @@ def build_podcast_prompt(
     style: str = "podcast",
     source_type: str | None = None,
     script_mode: str = "single",
+    podcast_length: str = DEFAULT_PODCAST_LENGTH,
 ) -> str:
+    target = get_podcast_length_target(podcast_length)
     title_line = f"Title: {title}\n" if title else ""
     source_label = "YouTube transcript" if source_type == "youtube" else "source material"
     normalized_mode = script_mode.strip().lower()
@@ -53,13 +92,14 @@ def build_podcast_prompt(
     return (
         "You are a podcast writer. "
         f"{mode_instruction}"
-        f"Aim for {TARGET_AUDIO_MINUTES_MIN}-{TARGET_AUDIO_MINUTES_MAX} minutes of speech, "
-        f"roughly {MIN_SPOKEN_WORDS}-{MAX_SPOKEN_WORDS} spoken words total. "
-        f"Do not exceed about {MAX_SPOKEN_WORDS} spoken words. "
+        f"Aim for {target.duration_label} of speech, "
+        f"roughly {target.min_spoken_words}-{target.max_spoken_words} spoken words total. "
+        f"Do not exceed about {target.max_spoken_words} spoken words. "
         "Use plain text only; do not include JSON, markdown, or stage directions. "
         "The output should be ready for text-to-speech without cleanup.\n\n"
         f"Style: {style}\n"
         f"Script Mode: {normalized_mode}\n"
+        f"Podcast Length: {target.preset}\n"
         f"{title_line}"
         f"Input Type: {source_type or 'article'}\n"
         f"{source_label}:\n"
@@ -155,13 +195,16 @@ def build_podcast_plan_prompt(
     document_map: dict[str, object],
     title: str | None,
     script_mode: str,
+    podcast_length: str = DEFAULT_PODCAST_LENGTH,
 ) -> str:
+    target = get_podcast_length_target(podcast_length)
     title_line = f"Document title: {title}\n" if title else ""
     return (
-        "You are planning a 2-4 minute podcast episode based on a structured document map. "
+        f"You are planning a {target.duration_label} podcast episode based on a structured document map. "
         "Return JSON only.\n\n"
         f"{title_line}"
         f"Podcast mode: {script_mode}\n\n"
+        f"Podcast length: {target.preset}\n\n"
         "Document map JSON:\n"
         f"{json.dumps(document_map, ensure_ascii=True, indent=2)}"
     )

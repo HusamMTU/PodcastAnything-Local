@@ -16,6 +16,7 @@ class CreateJobInput:
     title: str | None = None
     style: str = "podcast"
     script_mode: str = "single"
+    podcast_length: str = "medium"
     tts_provider: str = "openai"
     voice_id: str | None = None
     voice_id_b: str | None = None
@@ -34,6 +35,7 @@ class JobRecord:
     title: str | None
     style: str
     script_mode: str
+    podcast_length: str
     tts_provider: str
     voice_id: str | None
     voice_id_b: str | None

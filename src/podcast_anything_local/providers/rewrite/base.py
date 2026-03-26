@@ -18,6 +18,7 @@ class RewriteProvider(Protocol):
         style: str = "podcast",
         source_type: str | None = None,
         script_mode: str = "single",
+        podcast_length: str = "medium",
     ) -> str:
         """Rewrite source material into a podcast script."""
 

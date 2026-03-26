@@ -10,6 +10,8 @@ class AppConfigResponse(BaseModel):
     default_web_extractor: str
     script_writer: str
     default_tts_provider: str
+    default_podcast_length: str
     default_style: str
     supported_web_extractors: list[str] = Field(default_factory=list)
     supported_tts_providers: list[str] = Field(default_factory=list)
+    supported_podcast_lengths: list[str] = Field(default_factory=list)
