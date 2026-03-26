@@ -24,6 +24,10 @@ class _Response:
     def json(self) -> dict:
         return self._payload
 
+    def iter_content(self, chunk_size: int = 1):
+        del chunk_size
+        yield self.content
+
 
 def _wav_bytes(value: int) -> bytes:
     buffer = io.BytesIO()
@@ -128,3 +132,61 @@ def test_openai_tts_provider_surfaces_api_error_message(monkeypatch) -> None:
 
     with pytest.raises(TTSProviderError, match="voice not supported"):
         provider.synthesize(text="Hello world.", voice_id="bad-voice")
+
+
+def test_openai_tts_provider_streams_audio_speech(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _StreamingResponse(_Response):
+        def iter_content(self, chunk_size: int = 1):
+            captured["chunk_size"] = chunk_size
+            yield b"chunk-a"
+            yield b"chunk-b"
+
+    def _fake_post(
+        url: str,
+        *,
+        headers: dict[str, str],
+        json: dict[str, str],
+        timeout: int,
+        stream: bool,
+    ):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        captured["stream"] = stream
+        return _StreamingResponse(content=b"ignored")
+
+    monkeypatch.setattr("podcast_anything_local.providers.tts.openai.requests.post", _fake_post)
+    provider = OpenAITTSProvider(
+        base_url="https://api.openai.com/v1",
+        api_key="test-key",
+        model="gpt-4o-mini-tts",
+        response_format="wav",
+    )
+    chunks: list[bytes] = []
+
+    audio = provider.stream_synthesize(
+        text="Hello world.",
+        voice_id="marin",
+        on_chunk=chunks.append,
+    )
+
+    assert captured["url"] == "https://api.openai.com/v1/audio/speech"
+    assert captured["headers"] == {
+        "Authorization": "Bearer test-key",
+        "Content-Type": "application/json",
+    }
+    assert captured["json"] == {
+        "model": "gpt-4o-mini-tts",
+        "voice": "marin",
+        "input": "Hello world.",
+        "response_format": "wav",
+    }
+    assert captured["timeout"] == 180
+    assert captured["stream"] is True
+    assert chunks == [b"chunk-a", b"chunk-b"]
+    assert audio.data == b"chunk-achunk-b"
+    assert audio.file_name == "audio.wav"
+    assert audio.content_type == "audio/wav"

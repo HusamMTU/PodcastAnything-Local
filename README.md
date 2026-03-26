@@ -18,6 +18,8 @@ The project is built for local or self-hosted use. The default stack is:
 Documents with layout or slide structure go through a multimodal planning path.
 `pdf`, `docx`, and `pptx` inputs are analyzed as page-based documents before the
 final script is written, and `pptx` slide notes are included in that analysis.
+The built-in UI can also show the draft script before completion and preview
+audio during synthesis when the selected TTS path supports it.
 
 ## Table of Contents
 
@@ -52,8 +54,9 @@ final script is written, and `pptx` slide notes are included in that analysis.
 | Podcast modes | `single`, `duo` | Targets about 2-4 minutes of audio |
 | Script writer | OpenAI | Current built-in rewrite provider |
 | Voice generators | OpenAI, ElevenLabs | OpenAI is the default option; ElevenLabs is the higher-quality alternate |
+| Live audio preview | Yes | ElevenLabs `single` and `duo` stream live; OpenAI `single` streams live; OpenAI `duo` plays progressive preview segments |
 | Interfaces | Web UI, API, CLI | All use the same local job store |
-| Output artifacts | Yes | `script.txt`, `audio.wav`, `metadata.json`, plus planning artifacts for document jobs |
+| Output artifacts | Yes | `script.txt`, `audio.<ext>`, `metadata.json`, plus planning artifacts for document jobs |
 
 ## Pipeline Overview
 
@@ -90,7 +93,8 @@ flowchart TD
 
     Q --> R[Generate episode title]
     R --> S[TTS synthesis]
-    S --> T[Write artifacts: script.txt, audio.wav, metadata.json]
+    S --> U[Optional live audio preview during synthesis]
+    S --> T[Write artifacts: script.txt, audio.<ext>, metadata.json]
 ```
 
 ## Artifacts
@@ -105,7 +109,7 @@ Typical outputs:
 
 - `source.txt`
 - `script.txt`
-- `audio.wav`
+- `audio.wav` or `audio.mp3`
 - `metadata.json`
 
 Document jobs can also write intermediate artifacts such as:
@@ -118,6 +122,9 @@ Document jobs can also write intermediate artifacts such as:
 - `document_map.json`
 - `podcast_plan.json`
 - `rewrite_input.txt`
+
+OpenAI `duo` jobs can also write temporary preview artifacts such as
+`preview_audio_001.wav` while synthesis is in progress.
 
 If you use the CLI, it can also download copies into a separate folder such as:
 
@@ -180,7 +187,8 @@ From the UI:
 - submit a source
 - monitor progress
 - preview the script
-- play or download the audio
+- listen during synthesis when live preview is available
+- play or download the final audio
 
 From the CLI:
 
@@ -241,6 +249,7 @@ Available endpoints:
 - `GET /jobs/{job_id}`
 - `GET /jobs/{job_id}/artifacts`
 - `GET /jobs/{job_id}/artifacts/{artifact_name}`
+- `GET /jobs/{job_id}/audio-stream`
 - `POST /jobs/{job_id}/retry`
 
 Create a job from a URL:
@@ -322,6 +331,10 @@ Notes:
   required for reliable duo turn joining
 - if you want ElevenLabs instead of OpenAI TTS, set `TTS_PROVIDER=elevenlabs`
   and fill in `ELEVENLABS_API_KEY` plus `ELEVENLABS_VOICE_ID`
+- the built-in UI can preview audio during synthesis:
+  ElevenLabs `single` and `duo` stream live, OpenAI `single` streams live, and
+  OpenAI `duo` plays progressive preview segments while the final file is
+  assembled
 - ElevenLabs `single` uses the standard text-to-speech endpoint
 - ElevenLabs `duo` uses the dedicated text-to-dialogue endpoint with
   `ELEVENLABS_DIALOGUE_MODEL_ID`, which works better on plans like `Creator`
@@ -363,6 +376,7 @@ Verified locally:
 - `make test-openai-live MODEL=gpt-4o-mini`
 - `./.venv/bin/python -m pytest tests/test_tts_elevenlabs.py`
 - `make test-elevenlabs-live`
+- `make test-elevenlabs-live DUO=1`
 
 ## Troubleshooting
 
@@ -370,5 +384,8 @@ Verified locally:
 - If `.env` changes are not reflected, restart the API process.
 - If `make test-openai-live` fails, confirm `OPENAI_API_KEY` is set and the
   selected `OPENAI_MODEL` is available to your account.
+- If live audio preview does not appear in the UI, confirm the selected TTS
+  path supports it for that mode: ElevenLabs `single`/`duo`, OpenAI `single`,
+  or OpenAI `duo`.
 - If ElevenLabs duo synthesis fails, confirm `ELEVENLABS_VOICE_ID_B` is set and
   that your account can access the `ELEVENLABS_DIALOGUE_MODEL_ID` you selected.

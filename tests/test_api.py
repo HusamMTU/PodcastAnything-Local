@@ -12,6 +12,7 @@ from pypdf import PdfWriter
 from pptx import Presentation
 
 from podcast_anything_local.core.config import Settings
+from podcast_anything_local.db.models import CreateJobInput
 from podcast_anything_local.main import create_app
 from podcast_anything_local.providers.rewrite.openai_compatible import (
     OpenAICompatibleRewriteProvider,
@@ -251,6 +252,41 @@ def test_create_job_from_pasted_text(tmp_path: Path, monkeypatch) -> None:
         artifacts_payload = artifacts_response.json()
         artifacts = {item["name"] for item in artifacts_payload}
         assert {"audio.wav", "input_pasted_text.txt", "metadata.json", "script.txt", "source.txt"} <= artifacts
+
+
+def test_audio_stream_endpoint_returns_live_audio_chunks(tmp_path: Path) -> None:
+    app = create_app(_build_settings(tmp_path))
+    with TestClient(app) as client:
+        record = app.state.repository.create_job(
+            CreateJobInput(
+                job_id="job-streaming",
+                source_kind="text",
+                source_url=None,
+                source_file_name="pasted_text.txt",
+                source_file_path=None,
+                title=None,
+                style="podcast",
+                script_mode="single",
+                tts_provider="elevenlabs",
+                voice_id=None,
+                voice_id_b=None,
+                metadata={},
+            )
+        )
+        app.state.audio_stream_broker.open(
+            record.job_id,
+            content_type="audio/mpeg",
+            file_name="audio.mp3",
+        )
+        app.state.audio_stream_broker.publish(record.job_id, b"chunk-a")
+        app.state.audio_stream_broker.publish(record.job_id, b"chunk-b")
+        app.state.audio_stream_broker.close(record.job_id)
+
+        response = client.get(f"/jobs/{record.job_id}/audio-stream")
+
+        assert response.status_code == 200
+        assert response.content == b"chunk-achunk-b"
+        assert response.headers["content-type"].startswith("audio/mpeg")
 
 
 def test_create_job_from_uploaded_txt_file(tmp_path: Path, monkeypatch) -> None:

@@ -24,6 +24,10 @@ class _Response:
     def json(self) -> dict:
         return self._payload
 
+    def iter_content(self, chunk_size: int = 1):
+        del chunk_size
+        yield self.content
+
 
 def test_elevenlabs_tts_provider_calls_text_to_speech(monkeypatch) -> None:
     captured: dict[str, object] = {}
@@ -224,3 +228,113 @@ def test_elevenlabs_dialogue_provider_calls_text_to_dialogue(monkeypatch) -> Non
     assert audio.file_name == "audio.mp3"
     assert audio.content_type == "audio/mpeg"
     assert audio.data == b"dialogue-mp3"
+
+
+def test_elevenlabs_stream_synthesize_uses_stream_endpoint(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _StreamingResponse(_Response):
+        def iter_content(self, chunk_size: int = 1):
+            captured["chunk_size"] = chunk_size
+            yield b"chunk-a"
+            yield b"chunk-b"
+
+    def _fake_post(
+        url: str,
+        *,
+        params: dict[str, str],
+        headers: dict[str, str],
+        json: dict[str, str],
+        timeout: int,
+        stream: bool,
+    ):
+        captured["url"] = url
+        captured["params"] = params
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        captured["stream"] = stream
+        return _StreamingResponse(content=b"ignored")
+
+    monkeypatch.setattr("podcast_anything_local.providers.tts.elevenlabs.requests.post", _fake_post)
+    provider = ElevenLabsTTSProvider(
+        api_key="test-key",
+        model_id="eleven_multilingual_v2",
+        dialogue_model_id="eleven_v3",
+        output_format="mp3_44100_128",
+    )
+    streamed_chunks: list[bytes] = []
+
+    audio = provider.stream_synthesize(
+        text="Hello world.",
+        voice_id="voice-123",
+        on_chunk=streamed_chunks.append,
+    )
+
+    assert captured["url"] == "https://api.elevenlabs.io/v1/text-to-speech/voice-123/stream"
+    assert captured["params"] == {"output_format": "mp3_44100_128"}
+    assert captured["stream"] is True
+    assert captured["json"] == {
+        "text": "Hello world.",
+        "model_id": "eleven_multilingual_v2",
+    }
+    assert streamed_chunks == [b"chunk-a", b"chunk-b"]
+    assert audio.data == b"chunk-achunk-b"
+    assert audio.file_name == "audio.mp3"
+
+
+def test_elevenlabs_stream_dialogue_uses_stream_endpoint(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class _StreamingResponse(_Response):
+        def iter_content(self, chunk_size: int = 1):
+            captured["chunk_size"] = chunk_size
+            yield b"dialogue-a"
+            yield b"dialogue-b"
+
+    def _fake_post(
+        url: str,
+        *,
+        params: dict[str, str],
+        headers: dict[str, str],
+        json: dict[str, object],
+        timeout: int,
+        stream: bool,
+    ):
+        captured["url"] = url
+        captured["params"] = params
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        captured["stream"] = stream
+        return _StreamingResponse(content=b"ignored")
+
+    monkeypatch.setattr("podcast_anything_local.providers.tts.elevenlabs.requests.post", _fake_post)
+    provider = ElevenLabsTTSProvider(
+        api_key="test-key",
+        model_id="eleven_multilingual_v2",
+        dialogue_model_id="eleven_v3",
+        output_format="mp3_44100_128",
+    )
+    streamed_chunks: list[bytes] = []
+
+    audio = provider.stream_synthesize_dialogue(
+        turns=[("HOST_A", "Welcome back."), ("HOST_B", "Glad to be here.")],
+        voice_id_a="voice-a",
+        voice_id_b="voice-b",
+        on_chunk=streamed_chunks.append,
+    )
+
+    assert captured["url"] == "https://api.elevenlabs.io/v1/text-to-dialogue/stream"
+    assert captured["params"] == {"output_format": "mp3_44100_128"}
+    assert captured["stream"] is True
+    assert captured["json"] == {
+        "inputs": [
+            {"text": "Welcome back.", "voice_id": "voice-a"},
+            {"text": "Glad to be here.", "voice_id": "voice-b"},
+        ],
+        "model_id": "eleven_v3",
+    }
+    assert streamed_chunks == [b"dialogue-a", b"dialogue-b"]
+    assert audio.data == b"dialogue-adialogue-b"
+    assert audio.file_name == "audio.mp3"

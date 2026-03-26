@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.providers.tts.base import SynthesizedAudio, TTSProvider, TTSProviderError
@@ -56,6 +57,9 @@ class AudioService:
         provider_name: str | None,
         voice_id: str | None,
         voice_id_b: str | None,
+        on_stream_start: Callable[[str, str], None] | None = None,
+        on_stream_chunk: Callable[[bytes], None] | None = None,
+        on_preview_segment: Callable[[SynthesizedAudio, int], None] | None = None,
     ) -> SynthesizedAudio:
         resolved_provider_name = provider_name or self._settings.tts_provider
         normalized_provider_name = resolved_provider_name.strip().lower()
@@ -64,6 +68,8 @@ class AudioService:
                 script_text=script_text,
                 voice_id=voice_id,
                 voice_id_b=voice_id_b,
+                on_stream_start=on_stream_start,
+                on_stream_chunk=on_stream_chunk,
             )
         provider = self._build_provider(normalized_provider_name)
         if script_mode == "duo":
@@ -78,14 +84,16 @@ class AudioService:
                 raise TTSProviderError(
                     "script_mode=duo requires script lines prefixed with HOST_A: or HOST_B:."
                 )
-            segments = [
-                provider.synthesize(
+            segments: list[SynthesizedAudio] = []
+            for index, (speaker, turn_text) in enumerate(turns, start=1):
+                segment = provider.synthesize(
                     text=turn_text,
                     voice_id=host_a_voice if speaker == "HOST_A" else host_b_voice,
                     speaker="host_a" if speaker == "HOST_A" else "host_b",
                 )
-                for speaker, turn_text in turns
-                ]
+                segments.append(segment)
+                if normalized_provider_name == "openai" and on_preview_segment is not None:
+                    on_preview_segment(segment, index)
             return provider.join(segments)
 
         host_a_voice = self._resolve_single_voice(
@@ -96,6 +104,19 @@ class AudioService:
         spoken_text = _sanitize_single_host_script(script_text)
         if not spoken_text:
             raise TTSProviderError("No spoken text remained after cleaning the single-host script.")
+        if (
+            on_stream_start is not None
+            and on_stream_chunk is not None
+            and hasattr(provider, "supports_live_streaming")
+            and provider.supports_live_streaming()
+        ):
+            on_stream_start(provider.live_stream_content_type(), provider.live_stream_file_name())
+            return provider.stream_synthesize(
+                text=spoken_text,
+                voice_id=host_a_voice,
+                speaker="host_a",
+                on_chunk=on_stream_chunk,
+            )
         return provider.synthesize(text=spoken_text, voice_id=host_a_voice, speaker="host_a")
 
     def _synthesize_elevenlabs_duo(
@@ -104,6 +125,8 @@ class AudioService:
         script_text: str,
         voice_id: str | None,
         voice_id_b: str | None,
+        on_stream_start: Callable[[str, str], None] | None = None,
+        on_stream_chunk: Callable[[bytes], None] | None = None,
     ) -> SynthesizedAudio:
         provider = ElevenLabsTTSProvider(
             api_key=self._settings.elevenlabs_api_key,
@@ -120,6 +143,18 @@ class AudioService:
         if not turns:
             raise TTSProviderError(
                 "script_mode=duo requires script lines prefixed with HOST_A: or HOST_B:."
+            )
+        if (
+            on_stream_start is not None
+            and on_stream_chunk is not None
+            and provider.supports_live_streaming()
+        ):
+            on_stream_start(provider.live_stream_content_type(), provider.live_stream_file_name())
+            return provider.stream_synthesize_dialogue(
+                turns=turns,
+                voice_id_a=host_a_voice,
+                voice_id_b=host_b_voice,
+                on_chunk=on_stream_chunk,
             )
         return provider.synthesize_dialogue(
             turns=turns,

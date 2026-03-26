@@ -15,7 +15,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--duo",
         action="store_true",
-        help="Generate a two-speaker sample and join both turns.",
+        help="Generate a two-speaker sample through ElevenLabs dialogue mode.",
     )
     parser.add_argument(
         "--output",

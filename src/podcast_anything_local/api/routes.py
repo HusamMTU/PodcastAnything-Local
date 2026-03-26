@@ -3,13 +3,15 @@
 from __future__ import annotations
 
 import mimetypes
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, UploadFile, status
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 
 from podcast_anything_local.db.models import CreateJobInput
 from podcast_anything_local.db.repository import JobNotFoundError, generate_job_id
+from podcast_anything_local.jobs.audio_streams import JobAudioStreamNotFoundError
 from podcast_anything_local.schemas.config import AppConfigResponse
 from podcast_anything_local.schemas.jobs import ArtifactResponse, CreateJobRequest, JobResponse
 from podcast_anything_local.storage.artifacts import ArtifactNotFoundError
@@ -141,13 +143,51 @@ def download_job_artifact(job_id: str, artifact_name: str, request: Request) -> 
     )
 
 
+@router.get("/jobs/{job_id}/audio-stream", response_model=None)
+def stream_job_audio(job_id: str, request: Request) -> StreamingResponse | FileResponse:
+    repository = request.app.state.repository
+    artifact_store = request.app.state.artifact_store
+    audio_stream_broker = request.app.state.audio_stream_broker
+    try:
+        job = repository.get_job(job_id)
+    except JobNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    try:
+        return StreamingResponse(
+            audio_stream_broker.iter_chunks(job_id),
+            media_type=audio_stream_broker.get_content_type(job_id),
+            headers={"Cache-Control": "no-store"},
+        )
+    except JobAudioStreamNotFoundError:
+        if not job.audio_artifact:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Live audio stream not available for job: {job_id}",
+            ) from None
+
+    try:
+        artifact = artifact_store.get_artifact(job_id, Path(job.audio_artifact).name)
+    except ArtifactNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    media_type, _ = mimetypes.guess_type(artifact.name)
+    return FileResponse(
+        path=artifact.absolute_path,
+        media_type=media_type or "application/octet-stream",
+        filename=artifact.name,
+    )
+
+
 @router.post("/jobs/{job_id}/retry", response_model=JobResponse)
 def retry_job(job_id: str, request: Request) -> JobResponse:
     repository = request.app.state.repository
     artifact_store = request.app.state.artifact_store
+    audio_stream_broker = request.app.state.audio_stream_broker
     executor = request.app.state.executor
     try:
         existing = repository.get_job(job_id)
+        audio_stream_broker.clear(job_id)
         for artifact in artifact_store.list_artifacts(job_id):
             if existing.source_file_path and artifact.absolute_path == existing.source_file_path:
                 continue
