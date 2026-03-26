@@ -31,6 +31,7 @@ audio during synthesis when the selected TTS path supports it.
   - [2. Review TTS defaults](#2-review-tts-defaults)
   - [3. Start the app](#3-start-the-app)
   - [4. Submit a job](#4-submit-a-job)
+- [Docker](#docker)
 - [Usage](#usage)
   - [Web UI](#web-ui)
   - [CLI](#cli)
@@ -210,6 +211,34 @@ Expected result:
 - the job reaches `status: completed`
 - canonical artifacts are written under `data/jobs/<job_id>/`
 - if you used the CLI without `--no-download`, copies are written under `downloads/<job_id>/`
+
+## Docker
+
+You can run the app as a container instead of a local virtual environment.
+
+Build the image locally:
+
+```bash
+make docker-build
+```
+
+Run it with your `.env` file and a mounted data directory:
+
+```bash
+make docker-run
+```
+
+This maps:
+
+- `http://127.0.0.1:8000/` to the container
+- `./data` on your machine to `/app/data` in the container
+
+If you prefer plain Docker commands:
+
+```bash
+docker build -t podcast-anything-local:dev .
+docker run --rm -p 8000:8000 --env-file .env -v "$(pwd)/data:/app/data" podcast-anything-local:dev
+```
 
 ## Usage
 
@@ -424,9 +453,11 @@ git push origin main --follow-tags
 
 What happens next:
 
-- GitHub Actions builds the wheel and source distribution
+- GitHub Actions builds the Python wheel
 - the workflow creates a GitHub Release for the tag
 - built artifacts from `dist/` are attached to that release
+- the workflow also builds and pushes a GHCR image:
+  `ghcr.io/<owner>/podcast-anything-local:<tag>`
 
 You can also trigger the release workflow manually for an existing tag from the
 Actions tab.

@@ -9,8 +9,16 @@ are easy to update before each tag.
 
 ### Added
 
+- Nothing yet.
+
+## [0.2.0] - 2026-03-26
+
+### Added
+
 - Release checklist in the README
 - GitHub Actions release workflow for tagged builds
+- Dockerfile, `.dockerignore`, and Makefile targets for containerized runs
+- GHCR container publishing as part of the release workflow
 
 ## [0.1.0] - 2026-03-26
 

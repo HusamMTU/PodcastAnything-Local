@@ -1,6 +1,6 @@
 [project]
 name = "podcast-anything-local"
-version = "0.1.0"
+version = "0.2.0"
 description = "Local-first backend for turning URLs and documents into podcast scripts and audio."
 readme = "README.md"
 requires-python = ">=3.11"

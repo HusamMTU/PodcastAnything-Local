@@ -4,6 +4,8 @@ data/
 __pycache__/
 .pytest_cache/
 *.pyc
+build/
+dist/
 repo_inspect/
 LOCAL_FIRST_REBUILD_CONTEXT.md
 PRODUCT_POSITIONING.md

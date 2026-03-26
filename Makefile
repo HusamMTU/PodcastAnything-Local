@@ -1,6 +1,7 @@
 PYTHON ?= python3
+IMAGE ?= podcast-anything-local:dev
 
-.PHONY: setup lint format test-openai-live test-elevenlabs-live run run-job test test-ci
+.PHONY: setup lint format test-openai-live test-elevenlabs-live run run-job test test-ci docker-build docker-run
 
 setup:
 	$(PYTHON) -m venv .venv
@@ -34,3 +35,9 @@ test-ci:
 	./.venv/bin/ruff format --check .
 	./.venv/bin/python -m compileall src tests scripts
 	./.venv/bin/pytest
+
+docker-build:
+	docker build -t $(IMAGE) .
+
+docker-run:
+	docker run --rm -p 8000:8000 --env-file .env -v "$(PWD)/data:/app/data" $(IMAGE)
