@@ -62,7 +62,9 @@ def test_extract_article_text_errors_when_trafilatura_selected_and_empty(monkeyp
     )
 
     try:
-        _extract_article_text("<html><body><p>Ignored</p></body></html>", web_extractor="trafilatura")
+        _extract_article_text(
+            "<html><body><p>Ignored</p></body></html>", web_extractor="trafilatura"
+        )
     except IngestionServiceError as exc:
         assert "trafilatura" in str(exc)
     else:

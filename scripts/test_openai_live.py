@@ -7,7 +7,9 @@ import argparse
 from pathlib import Path
 
 from podcast_anything_local.core.config import load_settings
-from podcast_anything_local.providers.rewrite.openai_compatible import OpenAICompatibleRewriteProvider
+from podcast_anything_local.providers.rewrite.openai_compatible import (
+    OpenAICompatibleRewriteProvider,
+)
 
 
 def _parse_args() -> argparse.Namespace:

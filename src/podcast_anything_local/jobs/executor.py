@@ -49,4 +49,3 @@ class JobExecutor:
                 logger.exception("Job execution failed", extra={"job_id": job_id})
             finally:
                 self._queue.task_done()
-

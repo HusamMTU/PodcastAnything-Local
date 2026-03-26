@@ -5,7 +5,10 @@ from __future__ import annotations
 import json
 
 from podcast_anything_local.db.repository import JobRepository
-from podcast_anything_local.jobs.audio_streams import JobAudioStreamBroker, JobAudioStreamNotFoundError
+from podcast_anything_local.jobs.audio_streams import (
+    JobAudioStreamBroker,
+    JobAudioStreamNotFoundError,
+)
 from podcast_anything_local.services.audio import AudioService
 from podcast_anything_local.services.document_pipeline import MultimodalDocumentService
 from podcast_anything_local.services.ingestion import IngestionService

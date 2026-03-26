@@ -5,7 +5,9 @@ import base64
 import requests
 
 from podcast_anything_local.providers.rewrite.base import RewriteProviderError
-from podcast_anything_local.providers.rewrite.openai_compatible import OpenAICompatibleRewriteProvider
+from podcast_anything_local.providers.rewrite.openai_compatible import (
+    OpenAICompatibleRewriteProvider,
+)
 
 
 class _Response:

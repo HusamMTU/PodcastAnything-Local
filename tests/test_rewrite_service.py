@@ -123,7 +123,9 @@ Bob: Let's start with the photoelectric effect.
     )
 
 
-def test_rewrite_service_errors_early_for_unparseable_duo_output(tmp_path: Path, monkeypatch) -> None:
+def test_rewrite_service_errors_early_for_unparseable_duo_output(
+    tmp_path: Path, monkeypatch
+) -> None:
     service = RewriteService(_build_settings(tmp_path))
     monkeypatch.setattr(
         service,
@@ -290,9 +292,7 @@ def test_rewrite_service_truncates_long_duo_script_to_target_duration(
     )
 
     spoken_words = [
-        word
-        for word in result.replace("HOST_A:", "").replace("HOST_B:", "").split()
-        if word
+        word for word in result.replace("HOST_A:", "").replace("HOST_B:", "").split() if word
     ]
     assert len(spoken_words) <= MAX_SPOKEN_WORDS + 5
     assert result.startswith("HOST_A:")

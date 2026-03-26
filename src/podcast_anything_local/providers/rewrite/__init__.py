@@ -1,2 +1,1 @@
 """Rewrite providers."""
-

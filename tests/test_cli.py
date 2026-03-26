@@ -5,7 +5,11 @@ from urllib.parse import urlparse
 
 from fastapi.testclient import TestClient
 
-from podcast_anything_local.cli import JobSubmissionOptions, PodcastAnythingApiClient, run_job_command
+from podcast_anything_local.cli import (
+    JobSubmissionOptions,
+    PodcastAnythingApiClient,
+    run_job_command,
+)
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.main import create_app
 from podcast_anything_local.providers.rewrite.openai_compatible import (
@@ -59,7 +63,10 @@ class _TestClientSession:
 
 def test_cli_run_job_from_url_downloads_artifacts(tmp_path: Path, monkeypatch) -> None:
     _stub_openai_provider(monkeypatch)
-    def fake_ingest(self, *, source_kind=None, source_url=None, source_file_path=None, source_file_name=None):
+
+    def fake_ingest(
+        self, *, source_kind=None, source_url=None, source_file_path=None, source_file_name=None
+    ):
         assert source_kind == "url"
         assert source_url == "https://example.com/article"
         return (

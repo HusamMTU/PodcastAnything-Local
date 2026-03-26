@@ -6,7 +6,11 @@ import re
 from collections.abc import Callable
 
 from podcast_anything_local.core.config import Settings
-from podcast_anything_local.providers.tts.base import SynthesizedAudio, TTSProvider, TTSProviderError
+from podcast_anything_local.providers.tts.base import (
+    SynthesizedAudio,
+    TTSProvider,
+    TTSProviderError,
+)
 from podcast_anything_local.providers.tts.elevenlabs import ElevenLabsTTSProvider
 from podcast_anything_local.providers.tts.openai import OpenAITTSProvider
 from podcast_anything_local.providers.tts.wave import WaveTTSProvider
@@ -341,9 +345,11 @@ def _clean_duo_placeholder_tokens(text: str | None, *, speaker: str) -> str | No
         text,
     )
     cleaned = _COHOST_INTRO_RE.sub(
-        lambda match: f"{match.group(1)} my co-host"
-        if match.group(2).upper() == other_speaker
-        else match.group(0),
+        lambda match: (
+            f"{match.group(1)} my co-host"
+            if match.group(2).upper() == other_speaker
+            else match.group(0)
+        ),
         cleaned,
     )
     cleaned = re.sub(rf"\b{other_speaker}\b", "my co-host", cleaned, flags=re.IGNORECASE)

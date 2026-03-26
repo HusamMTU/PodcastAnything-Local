@@ -6,8 +6,8 @@ from pathlib import Path
 from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
-from pypdf import PdfWriter
 from pptx import Presentation
+from pypdf import PdfWriter
 
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.services.document_pipeline import MultimodalDocumentService
@@ -112,8 +112,7 @@ def _build_settings(tmp_path: Path) -> Settings:
 
 def _build_docx_bytes(paragraphs: list[str]) -> bytes:
     document_xml = "".join(
-        f"<w:p><w:r><w:t>{escape(paragraph)}</w:t></w:r></w:p>"
-        for paragraph in paragraphs
+        f"<w:p><w:r><w:t>{escape(paragraph)}</w:t></w:r></w:p>" for paragraph in paragraphs
     )
     content_types = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -231,7 +230,7 @@ def test_prepare_document_for_analysis_normalizes_docx_to_pdf(tmp_path: Path) ->
 
 
 def test_prepare_document_for_analysis_normalizes_pptx_and_feeds_notes_into_chunk_prompt(
-    tmp_path: Path
+    tmp_path: Path,
 ) -> None:
     presentation = Presentation()
     slide = presentation.slides.add_slide(presentation.slide_layouts[1])

@@ -2,14 +2,14 @@ from __future__ import annotations
 
 import json
 import time
-from xml.sax.saxutils import escape
 from io import BytesIO
 from pathlib import Path
+from xml.sax.saxutils import escape
 from zipfile import ZIP_DEFLATED, ZipFile
 
 from fastapi.testclient import TestClient
-from pypdf import PdfWriter
 from pptx import Presentation
+from pypdf import PdfWriter
 
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.db.models import CreateJobInput
@@ -126,8 +126,7 @@ def _stub_openai_provider(
 
 def _build_docx_bytes(paragraphs: list[str]) -> bytes:
     document_xml = "".join(
-        f"<w:p><w:r><w:t>{escape(paragraph)}</w:t></w:r></w:p>"
-        for paragraph in paragraphs
+        f"<w:p><w:r><w:t>{escape(paragraph)}</w:t></w:r></w:p>" for paragraph in paragraphs
     )
     content_types = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
@@ -181,7 +180,9 @@ def test_create_job_from_url_runs_pipeline(tmp_path: Path, monkeypatch) -> None:
         title="Local Podcast Conversation",
     )
 
-    def fake_ingest(self, *, source_kind=None, source_url=None, source_file_path=None, source_file_name=None):
+    def fake_ingest(
+        self, *, source_kind=None, source_url=None, source_file_path=None, source_file_name=None
+    ):
         assert source_kind == "url"
         assert source_url == "https://example.com/article"
         return (
@@ -255,7 +256,13 @@ def test_create_job_from_pasted_text(tmp_path: Path, monkeypatch) -> None:
         artifacts_response = client.get(f"/jobs/{payload['job_id']}/artifacts")
         artifacts_payload = artifacts_response.json()
         artifacts = {item["name"] for item in artifacts_payload}
-        assert {"audio.wav", "input_pasted_text.txt", "metadata.json", "script.txt", "source.txt"} <= artifacts
+        assert {
+            "audio.wav",
+            "input_pasted_text.txt",
+            "metadata.json",
+            "script.txt",
+            "source.txt",
+        } <= artifacts
 
 
 def test_audio_stream_endpoint_returns_live_audio_chunks(tmp_path: Path) -> None:
@@ -318,7 +325,13 @@ def test_create_job_from_uploaded_txt_file(tmp_path: Path, monkeypatch) -> None:
         artifacts_response = client.get(f"/jobs/{payload['job_id']}/artifacts")
         artifacts_payload = artifacts_response.json()
         artifacts = {item["name"] for item in artifacts_payload}
-        assert {"audio.wav", "input_brief.txt", "metadata.json", "script.txt", "source.txt"} <= artifacts
+        assert {
+            "audio.wav",
+            "input_brief.txt",
+            "metadata.json",
+            "script.txt",
+            "source.txt",
+        } <= artifacts
 
         audio_response = client.get(f"/jobs/{payload['job_id']}/artifacts/audio.wav")
         assert audio_response.status_code == 200
@@ -526,7 +539,9 @@ def test_create_job_from_uploaded_pdf_uses_multimodal_document_pipeline(
         if url.endswith("/chat/completions"):
             prompt = json["messages"][0]["content"]
             if "You are titling a podcast episode." in prompt:
-                return _FakeResponse({"choices": [{"message": {"content": "Title: Quantum PDF Brief"}}]})
+                return _FakeResponse(
+                    {"choices": [{"message": {"content": "Title: Quantum PDF Brief"}}]}
+                )
             return _FakeResponse(
                 {
                     "choices": [
@@ -629,7 +644,13 @@ def test_retry_job_clears_stale_generated_artifacts(tmp_path: Path, monkeypatch)
         artifacts_before_retry = {
             item["name"] for item in client.get(f"/jobs/{job_id}/artifacts").json()
         }
-        assert {"audio.wav", "input_brief.txt", "metadata.json", "script.txt", "source.txt"} <= artifacts_before_retry
+        assert {
+            "audio.wav",
+            "input_brief.txt",
+            "metadata.json",
+            "script.txt",
+            "source.txt",
+        } <= artifacts_before_retry
 
         client.app.state.executor.submit = lambda _: None
         retry_response = client.post(f"/jobs/{job_id}/retry")

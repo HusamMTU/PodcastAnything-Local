@@ -13,7 +13,6 @@ from urllib.parse import urlparse
 
 import requests
 
-
 DEFAULT_API_URL = os.environ.get("PODCAST_ANYTHING_API_URL", "http://127.0.0.1:8000")
 
 
@@ -103,8 +102,7 @@ class PodcastAnythingApiClient:
         if getattr(response, "status_code", 500) >= 400:
             detail = _extract_response_text(response)
             raise CliError(
-                f"API request failed for {method} {url} "
-                f"(status={response.status_code}): {detail}"
+                f"API request failed for {method} {url} (status={response.status_code}): {detail}"
             )
         return response
 
@@ -115,7 +113,9 @@ class PodcastAnythingApiClient:
             raise CliError(f"Could not decode JSON response while trying to {operation}.") from exc
 
 
-def run_job_command(client: PodcastAnythingApiClient, options: JobSubmissionOptions) -> tuple[dict[str, Any], list[Path]]:
+def run_job_command(
+    client: PodcastAnythingApiClient, options: JobSubmissionOptions
+) -> tuple[dict[str, Any], list[Path]]:
     created_job = client.create_job(options)
     job_id = created_job["job_id"]
 

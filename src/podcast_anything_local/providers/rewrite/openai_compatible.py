@@ -190,8 +190,7 @@ class OpenAICompatibleRewriteProvider:
                     "type": "input_file",
                     "filename": filename or "document.pdf",
                     "file_data": (
-                        "data:application/pdf;base64,"
-                        f"{base64.b64encode(pdf_bytes).decode('ascii')}"
+                        f"data:application/pdf;base64,{base64.b64encode(pdf_bytes).decode('ascii')}"
                     ),
                 }
             )
@@ -309,7 +308,7 @@ def _retry_delay_seconds(response: requests.Response, attempt: int) -> float:
             value = 0.0
         if value > 0:
             return min(value, 10.0)
-    return float(min(2 ** attempt, 4))
+    return float(min(2**attempt, 4))
 
 
 def _extract_responses_output_text(payload: dict[str, object]) -> str:

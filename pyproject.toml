@@ -22,6 +22,7 @@ dependencies = [
 dev = [
   "httpx>=0.28.1",
   "pytest>=8.3.4",
+  "ruff>=0.11.13",
 ]
 
 [build-system]
@@ -33,3 +34,16 @@ packages = ["src/podcast_anything_local"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

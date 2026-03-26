@@ -8,7 +8,6 @@ from fastapi import APIRouter, FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-
 _WEB_ASSETS_DIR = Path(__file__).resolve().parent / "web_assets"
 
 router = APIRouter(include_in_schema=False)

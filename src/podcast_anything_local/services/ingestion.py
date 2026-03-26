@@ -159,8 +159,6 @@ def _extract_article_text_with_bs4(html: str) -> str:
     return cleaned
 
 
-
-
 def _detect_document_type(filename: str) -> str:
     extension = Path(filename).suffix.lower()
     document_type = _SUPPORTED_EXTENSIONS.get(extension)

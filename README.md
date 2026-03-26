@@ -360,14 +360,26 @@ Run the test suite:
 make test
 ```
 
+Run lint and formatting checks:
+
+```bash
+make lint
+```
+
+Apply Ruff fixes and formatting:
+
+```bash
+make format
+```
+
 ## CI
 
 This repo includes two GitHub Actions workflows:
 
 - `CI`
-  Runs on every pull request and on pushes to `main`. It compiles `src/`,
-  `tests/`, and `scripts/`, then runs the full pytest suite on Python `3.11`
-  and `3.13`.
+  Runs on every pull request and on pushes to `main`. It runs `ruff check .`,
+  `ruff format --check .`, compiles `src/`, `tests/`, and `scripts/`, then
+  runs the full pytest suite on Python `3.11` and `3.13`.
 - `Integration Hosted`
   Runs on `workflow_dispatch` and nightly. It runs a real OpenAI rewrite smoke
   test. To enable it, add the `OPENAI_API_KEY` GitHub Actions secret to the

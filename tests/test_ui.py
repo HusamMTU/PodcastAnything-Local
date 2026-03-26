@@ -43,11 +43,14 @@ def test_root_serves_built_in_ui(tmp_path: Path) -> None:
         assert ">Studio</h2>" in response.text
         assert "Audio generator" in response.text
         assert "Episode length" in response.text
-        assert response.text.index('<option value="duo" selected>Two hosts</option>') < response.text.index(
-            '<option value="single">Single host</option>'
-        )
+        assert response.text.index(
+            '<option value="duo" selected>Two hosts</option>'
+        ) < response.text.index('<option value="single">Single host</option>')
         assert '<option value="duo" selected>Two hosts</option>' in response.text
-        assert '<select id="tts-provider" name="tts_provider" form="job-form"></select>' in response.text
+        assert (
+            '<select id="tts-provider" name="tts_provider" form="job-form"></select>'
+            in response.text
+        )
         assert 'id="podcast-length"' in response.text
         assert 'name="podcast_length"' in response.text
         assert 'data-podcast-length="short"' in response.text
@@ -63,9 +66,15 @@ def test_root_serves_built_in_ui(tmp_path: Path) -> None:
         assert 'name="source_text"' in response.text
         assert 'accept=".txt,.pdf,.docx,.pptx"' in response.text
         assert 'id="workspace-grid" class="workspace-grid studio-collapsed"' in response.text
-        assert 'id="sources-panel" class="panel workspace-panel side-panel sources-panel"' in response.text
+        assert (
+            'id="sources-panel" class="panel workspace-panel side-panel sources-panel"'
+            in response.text
+        )
         assert 'class="panel workspace-panel episode-panel"' in response.text
-        assert 'id="studio-panel" class="panel workspace-panel side-panel studio-panel is-collapsed"' in response.text
+        assert (
+            'id="studio-panel" class="panel workspace-panel side-panel studio-panel is-collapsed"'
+            in response.text
+        )
         assert 'id="sources-collapse"' in response.text
         assert 'id="sources-expand"' in response.text
         assert 'id="studio-collapse"' in response.text
@@ -147,7 +156,10 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "background" in css_response.text
         assert ".workspace-title" in css_response.text
         assert ".workspace-grid" in css_response.text
-        assert "grid-template-columns: var(--sources-width) var(--episode-width) var(--studio-width);" in css_response.text
+        assert (
+            "grid-template-columns: var(--sources-width) var(--episode-width) var(--studio-width);"
+            in css_response.text
+        )
         assert "--side-panel-collapsed-width: 4.75rem;" in css_response.text
         assert "--episode-panel-width: minmax(0, 2fr);" in css_response.text
         assert ".workspace-grid.studio-collapsed" in css_response.text
@@ -194,37 +206,51 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "scrollbar-gutter: stable;" in css_response.text
         assert js_response.status_code == 200
         assert "fetchJson" in js_response.text
-        assert 'source_text' in js_response.text
+        assert "source_text" in js_response.text
         assert "syncSelectedSettingsSummary" not in js_response.text
         assert "setSourcesView" in js_response.text
         assert "setPodcastLength" in js_response.text
-        assert 'const preferredValue = (values || []).includes("openai") ? "openai" : values?.[0] || "";' in js_response.text
+        assert (
+            'const preferredValue = (values || []).includes("openai") ? "openai" : values?.[0] || "";'
+            in js_response.text
+        )
         assert 'if (state.sourcesView === "history") {' in js_response.text
         assert "void refreshJobs();" in js_response.text
-        assert 'appendIfValue(formData, "podcast_length", elements.podcastLengthInput.value);' in js_response.text
+        assert (
+            'appendIfValue(formData, "podcast_length", elements.podcastLengthInput.value);'
+            in js_response.text
+        )
         assert "renderScriptPreview" in js_response.text
         assert "updateArtifactHint" in js_response.text
         assert "hasArtifactContext" in js_response.text
-        assert 'Inspect the files saved for the current job.' in js_response.text
-        assert 'No artifacts yet. Run a job or select a past one.' in js_response.text
+        assert "Inspect the files saved for the current job." in js_response.text
+        assert "No artifacts yet. Run a job or select a past one." in js_response.text
         assert "createScriptTurn" in js_response.text
         assert "shouldLoadArtifacts" in js_response.text
         assert '["rewriting", "synthesizing"].includes(job.current_stage || "")' in js_response.text
         assert "shouldUseLiveAudioStream" in js_response.text
         assert 'job.tts_provider === "elevenlabs"' in js_response.text
         assert '(job.tts_provider === "openai" && job.script_mode === "single")' in js_response.text
-        assert 'elements.audioPlayer.src = `/jobs/${job.job_id}/audio-stream?v=${Date.now()}`;' in js_response.text
+        assert (
+            "elements.audioPlayer.src = `/jobs/${job.job_id}/audio-stream?v=${Date.now()}`;"
+            in js_response.text
+        )
         assert "pendingAudioArtifactUrl" in js_response.text
         assert "shouldDeferAudioArtifactSwap" in js_response.text
         assert "promotePendingAudioArtifact" in js_response.text
-        assert 'elements.audioPlayer.addEventListener("ended", handleAudioEnded);' in js_response.text
+        assert (
+            'elements.audioPlayer.addEventListener("ended", handleAudioEnded);' in js_response.text
+        )
         assert "shouldUsePreviewAudioSegments" in js_response.text
         assert 'job.tts_provider === "openai" &&' in js_response.text
         assert 'job.script_mode === "duo"' in js_response.text
         assert "syncPreviewAudioSegments" in js_response.text
         assert "playPreviewAudioSegment" in js_response.text
         assert "advancePreviewAudioSegment" in js_response.text
-        assert 'const audio = artifacts.find((artifact) => /^audio\\.(wav|mp3|flac|aac|opus)$/i.test(artifact.name));' in js_response.text
+        assert (
+            "const audio = artifacts.find((artifact) => /^audio\\.(wav|mp3|flac|aac|opus)$/i.test(artifact.name));"
+            in js_response.text
+        )
         assert "jobTitleShell" in js_response.text
         assert "Generating title..." not in js_response.text
         assert "setPanelCollapsed" in js_response.text
@@ -232,5 +258,5 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "refreshJobsButton" not in js_response.text
         assert "providerSummary" not in js_response.text
         assert "loadHealth" not in js_response.text
-        assert 'voice_id' not in js_response.text
-        assert 'voice_id_b' not in js_response.text
+        assert "voice_id" not in js_response.text
+        assert "voice_id_b" not in js_response.text

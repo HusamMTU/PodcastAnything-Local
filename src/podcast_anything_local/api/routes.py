@@ -65,7 +65,9 @@ async def create_job(request: Request) -> JobResponse:
         file_bytes = await upload.read()
         if not file_bytes:
             raise HTTPException(status_code=400, detail="Uploaded file is empty.")
-        source_file_path = artifact_store.save_uploaded_file(job_id, upload.filename or "upload.bin", file_bytes)
+        source_file_path = artifact_store.save_uploaded_file(
+            job_id, upload.filename or "upload.bin", file_bytes
+        )
         metadata["uploaded_content_type"] = upload.content_type
     elif payload["source_text"] is not None:
         source_text = payload["source_text"]
@@ -243,7 +245,8 @@ async def _parse_create_request(
             title=_optional_form_value(form.get("title")),
             style=_optional_form_value(form.get("style")) or "podcast",
             script_mode=_optional_form_value(form.get("script_mode")) or "single",
-            podcast_length=_optional_form_value(form.get("podcast_length")) or default_podcast_length,
+            podcast_length=_optional_form_value(form.get("podcast_length"))
+            or default_podcast_length,
             tts_provider=_optional_form_value(form.get("tts_provider")),
             voice_id=_optional_form_value(form.get("voice_id")),
             voice_id_b=_optional_form_value(form.get("voice_id_b")),
@@ -278,7 +281,9 @@ def _normalize_inputs(
         "source_url": source_url,
         "source_text": source_text,
         "source_file": source_file,
-        "source_file_name": "pasted_text.txt" if source_text else (source_file.filename if source_file else None),
+        "source_file_name": "pasted_text.txt"
+        if source_text
+        else (source_file.filename if source_file else None),
         "title": title,
         "style": style.strip() if style else "podcast",
         "script_mode": script_mode,
@@ -297,6 +302,4 @@ def _optional_form_value(value: object) -> str | None:
 
 
 def _is_upload_file(value: object) -> bool:
-    return isinstance(value, UploadFile) or (
-        hasattr(value, "filename") and hasattr(value, "read")
-    )
+    return isinstance(value, UploadFile) or (hasattr(value, "filename") and hasattr(value, "read"))

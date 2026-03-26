@@ -10,7 +10,9 @@ from podcast_anything_local.providers.tts.elevenlabs import ElevenLabsTTSProvide
 
 
 class _Response:
-    def __init__(self, *, content: bytes, status_code: int = 200, payload: dict | None = None) -> None:
+    def __init__(
+        self, *, content: bytes, status_code: int = 200, payload: dict | None = None
+    ) -> None:
         self.content = content
         self.status_code = status_code
         self._payload = payload or {}

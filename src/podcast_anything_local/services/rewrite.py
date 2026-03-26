@@ -202,7 +202,9 @@ def _normalize_duo_script(script_text: str) -> str:
         )
 
     speaker_set = {speaker for speaker, _ in turns}
-    speaker_changes = sum(1 for index in range(1, len(turns)) if turns[index][0] != turns[index - 1][0])
+    speaker_changes = sum(
+        1 for index in range(1, len(turns)) if turns[index][0] != turns[index - 1][0]
+    )
     if (
         speaker_set != {"HOST_A", "HOST_B"}
         or len(turns) < _MIN_DUO_TURNS
@@ -224,7 +226,9 @@ def _normalize_duo_script(script_text: str) -> str:
 
 
 def _prepare_source_text_for_rewrite(source_text: str, *, script_mode: str) -> tuple[str, bool]:
-    normalized = unicodedata.normalize("NFKC", source_text).replace("\r\n", "\n").replace("\r", "\n")
+    normalized = (
+        unicodedata.normalize("NFKC", source_text).replace("\r\n", "\n").replace("\r", "\n")
+    )
     cleaned_lines: list[str] = []
     previous_line: str | None = None
 
@@ -249,7 +253,9 @@ def _prepare_source_text_for_rewrite(source_text: str, *, script_mode: str) -> t
     if not cleaned_text:
         cleaned_text = re.sub(r"\s+", " ", normalized).strip()
 
-    max_chars = _SOURCE_MAX_CHARS_DUO if script_mode.strip().lower() == "duo" else _SOURCE_MAX_CHARS_SINGLE
+    max_chars = (
+        _SOURCE_MAX_CHARS_DUO if script_mode.strip().lower() == "duo" else _SOURCE_MAX_CHARS_SINGLE
+    )
     return _truncate_source_text(cleaned_text, max_chars=max_chars)
 
 
@@ -413,7 +419,9 @@ def _truncate_plain_text_to_word_budget(text: str, *, max_words: int) -> str:
         if remaining_words <= 0:
             break
 
-        truncated_paragraph = _truncate_paragraph_to_word_budget(paragraph, max_words=remaining_words)
+        truncated_paragraph = _truncate_paragraph_to_word_budget(
+            paragraph, max_words=remaining_words
+        )
         if not truncated_paragraph:
             break
         selected.append(truncated_paragraph)
@@ -428,7 +436,11 @@ def _truncate_paragraph_to_word_budget(paragraph: str, *, max_words: int) -> str
     if _count_script_words(paragraph) <= max_words:
         return paragraph.strip()
 
-    sentences = [sentence.strip() for sentence in _SENTENCE_SPLIT_RE.split(paragraph.strip()) if sentence.strip()]
+    sentences = [
+        sentence.strip()
+        for sentence in _SENTENCE_SPLIT_RE.split(paragraph.strip())
+        if sentence.strip()
+    ]
     if not sentences:
         return _truncate_text_fragment(paragraph, max_words=max_words)
 

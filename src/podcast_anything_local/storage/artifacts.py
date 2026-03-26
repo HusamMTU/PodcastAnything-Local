@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-import os
 
 
 class ArtifactStoreError(RuntimeError):
@@ -100,8 +100,7 @@ class LocalArtifactStore:
 
 def _sanitize_text_for_utf8(text: str) -> str:
     return "".join(
-        character if not _is_surrogate_codepoint(character) else "\uFFFD"
-        for character in text
+        character if not _is_surrogate_codepoint(character) else "\ufffd" for character in text
     )
 
 

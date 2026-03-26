@@ -46,9 +46,7 @@ def get_podcast_length_target(podcast_length: str | None) -> PodcastLengthTarget
         return _PODCAST_LENGTH_TARGETS[normalized]
     except KeyError as exc:
         supported = ", ".join(SUPPORTED_PODCAST_LENGTHS)
-        raise RewriteProviderError(
-            f"podcast_length must be one of: {supported}"
-        ) from exc
+        raise RewriteProviderError(f"podcast_length must be one of: {supported}") from exc
 
 
 def build_podcast_prompt(
@@ -157,8 +155,7 @@ def build_pdf_chunk_summary_prompt(
     supplemental_section = ""
     if supplemental_text and supplemental_text.strip():
         supplemental_section = (
-            "\n\nSupplemental extracted text for these pages:\n"
-            f"{supplemental_text.strip()}"
+            f"\n\nSupplemental extracted text for these pages:\n{supplemental_text.strip()}"
         )
     return (
         "You are analyzing one chunk of a longer source document for a podcast adaptation. "

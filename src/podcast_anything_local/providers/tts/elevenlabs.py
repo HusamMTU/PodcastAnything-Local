@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable
 import json
 import re
+from collections.abc import Callable
 
 import requests
 
@@ -107,9 +107,13 @@ class ElevenLabsTTSProvider:
         if not self._api_key:
             raise TTSProviderError("ELEVENLABS_API_KEY is required for elevenlabs TTS.")
         if not voice_id_a or not voice_id_b:
-            raise TTSProviderError("Both voice_id_a and voice_id_b are required for elevenlabs dialogue.")
+            raise TTSProviderError(
+                "Both voice_id_a and voice_id_b are required for elevenlabs dialogue."
+            )
         if not turns:
-            raise TTSProviderError("At least one dialogue turn is required for elevenlabs dialogue.")
+            raise TTSProviderError(
+                "At least one dialogue turn is required for elevenlabs dialogue."
+            )
 
         inputs = [
             {
@@ -162,9 +166,13 @@ class ElevenLabsTTSProvider:
         if not self._api_key:
             raise TTSProviderError("ELEVENLABS_API_KEY is required for elevenlabs TTS.")
         if not voice_id_a or not voice_id_b:
-            raise TTSProviderError("Both voice_id_a and voice_id_b are required for elevenlabs dialogue.")
+            raise TTSProviderError(
+                "Both voice_id_a and voice_id_b are required for elevenlabs dialogue."
+            )
         if not turns:
-            raise TTSProviderError("At least one dialogue turn is required for elevenlabs dialogue.")
+            raise TTSProviderError(
+                "At least one dialogue turn is required for elevenlabs dialogue."
+            )
 
         inputs = [
             {

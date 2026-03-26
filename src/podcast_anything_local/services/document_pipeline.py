@@ -17,7 +17,7 @@ from podcast_anything_local.providers.rewrite.openai_compatible import (
 )
 
 try:
-    from reportlab.lib.pagesizes import letter, landscape
+    from reportlab.lib.pagesizes import landscape, letter
     from reportlab.lib.units import inch
     from reportlab.pdfbase.pdfmetrics import stringWidth
     from reportlab.pdfgen import canvas
@@ -123,7 +123,9 @@ class MultimodalDocumentService:
 
         if normalized_type == "pdf":
             if not source_file_path:
-                raise DocumentPipelineError("PDF source file path is required for multimodal analysis.")
+                raise DocumentPipelineError(
+                    "PDF source file path is required for multimodal analysis."
+                )
             return PreparedDocumentBundle(
                 analysis_pdf_path=source_file_path,
                 analysis_pdf_bytes=None,
@@ -210,9 +212,7 @@ class MultimodalDocumentService:
                 },
             )
 
-        raise DocumentPipelineError(
-            f"Unsupported multimodal document type: {source_type}"
-        )
+        raise DocumentPipelineError(f"Unsupported multimodal document type: {source_type}")
 
     def analyze_pdf_document(
         self,
@@ -349,7 +349,9 @@ class MultimodalDocumentService:
         for summary in analysis.chunk_summaries:
             page_start = summary.get("page_start")
             page_end = summary.get("page_end")
-            lines.append(f"Pages {page_start}-{page_end}: {_string_value(summary.get('summary')) or ''}".rstrip())
+            lines.append(
+                f"Pages {page_start}-{page_end}: {_string_value(summary.get('summary')) or ''}".rstrip()
+            )
             key_points = _list_of_strings(summary.get("key_points"))
             for item in key_points[:4]:
                 lines.append(f"- {item}")
@@ -420,9 +422,7 @@ class MultimodalDocumentService:
 
 def _require_reportlab() -> None:
     if canvas is None or letter is None or landscape is None or inch is None or stringWidth is None:
-        raise DocumentPipelineError(
-            "Document normalization requires the `reportlab` package."
-        )
+        raise DocumentPipelineError("Document normalization requires the `reportlab` package.")
 
 
 def _count_pdf_pages(pdf_path: Path) -> int:
@@ -469,7 +469,9 @@ def _build_pdf_chunks(pdf_path: Path) -> list[PdfChunk]:
     return chunks
 
 
-def _chunk_supplemental_text(page_context: dict[int, str], *, page_numbers: tuple[int, ...]) -> str | None:
+def _chunk_supplemental_text(
+    page_context: dict[int, str], *, page_numbers: tuple[int, ...]
+) -> str | None:
     if not page_context:
         return None
 
@@ -493,7 +495,9 @@ def _serialize_page_context(page_context: dict[int, str]) -> list[dict[str, obje
     ]
 
 
-def _build_docx_normalized_pdf(*, source_text: str, document_name: str) -> tuple[bytes, dict[int, str]]:
+def _build_docx_normalized_pdf(
+    *, source_text: str, document_name: str
+) -> tuple[bytes, dict[int, str]]:
     paragraphs = [block.strip() for block in source_text.split("\n\n") if block.strip()]
     if not paragraphs:
         raise DocumentPipelineError("No extracted DOCX text was available for PDF normalization.")
@@ -563,12 +567,16 @@ def _build_pptx_normalized_pdf(
 
         body_lines = list(slide.body_lines)
         if body_lines:
-            for line in _wrap_text("Slide content", usable_width, _SECTION_FONT, _SECTION_FONT_SIZE):
+            for line in _wrap_text(
+                "Slide content", usable_width, _SECTION_FONT, _SECTION_FONT_SIZE
+            ):
                 if current_height + _SECTION_LEADING > usable_height:
                     start_slide_page(slide, continued=True)
                 add_line(line, _SECTION_FONT, _SECTION_FONT_SIZE, _SECTION_LEADING)
             for body_line in body_lines:
-                for wrapped in _wrap_text(f"- {body_line}", usable_width, _BODY_FONT, _BODY_FONT_SIZE):
+                for wrapped in _wrap_text(
+                    f"- {body_line}", usable_width, _BODY_FONT, _BODY_FONT_SIZE
+                ):
                     if current_height + _BODY_LEADING > usable_height:
                         start_slide_page(slide, continued=True)
                     add_line(wrapped, _BODY_FONT, _BODY_FONT_SIZE, _BODY_LEADING)
@@ -577,14 +585,18 @@ def _build_pptx_normalized_pdf(
             if current_height + (_SECTION_LEADING * 2) > usable_height:
                 start_slide_page(slide, continued=True)
             add_line("", _BODY_FONT, _BODY_FONT_SIZE, _SPACER_LEADING)
-            for line in _wrap_text("Speaker notes", usable_width, _SECTION_FONT, _SECTION_FONT_SIZE):
+            for line in _wrap_text(
+                "Speaker notes", usable_width, _SECTION_FONT, _SECTION_FONT_SIZE
+            ):
                 if current_height + _SECTION_LEADING > usable_height:
                     start_slide_page(slide, continued=True)
                 add_line(line, _SECTION_FONT, _SECTION_FONT_SIZE, _SECTION_LEADING)
             for note_line in slide.notes_text.splitlines():
                 if not note_line.strip():
                     continue
-                for wrapped in _wrap_text(note_line.strip(), usable_width, _BODY_FONT, _BODY_FONT_SIZE):
+                for wrapped in _wrap_text(
+                    note_line.strip(), usable_width, _BODY_FONT, _BODY_FONT_SIZE
+                ):
                     if current_height + _BODY_LEADING > usable_height:
                         start_slide_page(slide, continued=True)
                     add_line(wrapped, _BODY_FONT, _BODY_FONT_SIZE, _BODY_LEADING)
@@ -652,7 +664,9 @@ def _paginate_docx_pages(
         if continued:
             heading = f"{heading} (continued)"
         for line in _wrap_text(heading, usable_width, _HEADER_FONT, _HEADER_FONT_SIZE):
-            add_line(line, _HEADER_FONT, _HEADER_FONT_SIZE, _HEADER_LEADING, include_in_context=False)
+            add_line(
+                line, _HEADER_FONT, _HEADER_FONT_SIZE, _HEADER_LEADING, include_in_context=False
+            )
         add_line("", _BODY_FONT, _BODY_FONT_SIZE, _SPACER_LEADING, include_in_context=False)
 
     start_page(continued=False)
