@@ -42,6 +42,12 @@ def test_root_serves_built_in_ui(tmp_path: Path) -> None:
         assert ">Episode</h2>" in response.text
         assert ">Studio</h2>" in response.text
         assert "Audio generator" in response.text
+        assert response.text.index('<option value="duo" selected>Two hosts</option>') < response.text.index(
+            '<option value="single">Single host</option>'
+        )
+        assert '<option value="duo" selected>Two hosts</option>' in response.text
+        assert '<select id="tts-provider" name="tts_provider" form="job-form"></select>' in response.text
+        assert "Use default" not in response.text
         assert 'class="panel-view-switch"' in response.text
         assert 'data-sources-view="new"' in response.text
         assert 'data-sources-view="history"' in response.text
@@ -72,11 +78,14 @@ def test_root_serves_built_in_ui(tmp_path: Path) -> None:
         assert "No audio loaded yet." not in response.text
         assert "This panel updates as the job progresses." not in response.text
         assert '<details class="content-card artifact-card-collapsible">' in response.text
-        assert 'id="settings-mode-summary"' in response.text
-        assert 'id="settings-voice-summary"' in response.text
+        assert 'id="artifact-hint"' in response.text
+        assert "No artifacts yet. Run a job or select a past one." in response.text
+        assert 'id="settings-mode-summary"' not in response.text
+        assert 'id="settings-voice-summary"' not in response.text
         assert 'id="job-script-mode"' not in response.text
         assert 'id="job-providers"' not in response.text
         assert 'id="retry-button"' in response.text
+        assert 'id="refresh-jobs-button"' not in response.text
         assert 'id="refresh-job-button"' not in response.text
         assert 'id="job-id"' not in response.text
         assert 'id="job-status-badge"' not in response.text
@@ -142,7 +151,6 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "justify-content: flex-start;" in css_response.text
         assert ".panel-view-switch" in css_response.text
         assert ".panel-view-button" in css_response.text
-        assert ".studio-summary" in css_response.text
         assert ".episode-top" in css_response.text
         assert "--panel-height: min(86vh, 64rem);" in css_response.text
         assert "max-height: var(--panel-height);" in css_response.text
@@ -159,6 +167,8 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert ".script-turn" in css_response.text
         assert ".source-textarea" in css_response.text
         assert ".studio-settings-grid label" in css_response.text
+        assert ".studio-settings-grid .input-group" in css_response.text
+        assert "gap: 0.48rem;" in css_response.text
         assert ".artifact-card-collapsible" in css_response.text
         assert ".artifact-summary::after" in css_response.text
         assert ".artifact-list" in css_response.text
@@ -171,9 +181,16 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert js_response.status_code == 200
         assert "fetchJson" in js_response.text
         assert 'source_text' in js_response.text
-        assert "syncSelectedSettingsSummary" in js_response.text
+        assert "syncSelectedSettingsSummary" not in js_response.text
         assert "setSourcesView" in js_response.text
+        assert 'const preferredValue = (values || []).includes("openai") ? "openai" : values?.[0] || "";' in js_response.text
+        assert 'if (state.sourcesView === "history") {' in js_response.text
+        assert "void refreshJobs();" in js_response.text
         assert "renderScriptPreview" in js_response.text
+        assert "updateArtifactHint" in js_response.text
+        assert "hasArtifactContext" in js_response.text
+        assert 'Inspect the files saved for the current job.' in js_response.text
+        assert 'No artifacts yet. Run a job or select a past one.' in js_response.text
         assert "createScriptTurn" in js_response.text
         assert "shouldLoadArtifacts" in js_response.text
         assert '["rewriting", "synthesizing"].includes(job.current_stage || "")' in js_response.text
@@ -196,6 +213,7 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "Generating title..." not in js_response.text
         assert "setPanelCollapsed" in js_response.text
         assert "applyPanelState" in js_response.text
+        assert "refreshJobsButton" not in js_response.text
         assert "providerSummary" not in js_response.text
         assert "loadHealth" not in js_response.text
         assert 'voice_id' not in js_response.text

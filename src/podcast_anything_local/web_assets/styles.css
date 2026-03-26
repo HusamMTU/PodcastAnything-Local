@@ -384,7 +384,11 @@ dt {
 }
 
 .studio-settings-grid .input-group {
-  gap: 0.35rem;
+  gap: 0.48rem;
+}
+
+.studio-panel .panel-block h3 + .studio-settings-grid {
+  margin-top: 1rem;
 }
 
 .input-group.is-hidden {
@@ -460,27 +464,6 @@ a:focus-visible {
   min-height: 1.2rem;
   margin: 0;
   font-size: 0.92rem;
-}
-
-.summary-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.32rem 0.62rem;
-  border-radius: 999px;
-  border: 1px solid var(--line);
-  background: rgba(255, 255, 255, 0.42);
-  color: var(--muted);
-  font-size: 0.74rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-.studio-summary {
-  display: flex;
-  gap: 0.45rem;
-  flex-wrap: wrap;
-  margin-top: 0.55rem;
 }
 
 .episode-top {
@@ -652,6 +635,10 @@ dd {
   flex-direction: column;
 }
 
+.script-card .artifact-header {
+  padding-right: 3.4rem;
+}
+
 .audio-player {
   width: 100%;
   margin-top: 0.9rem;
@@ -660,7 +647,7 @@ dd {
 .script-preview {
   min-height: 0;
   flex: 1;
-  margin-top: 0.85rem;
+  margin-top: 1.3rem;
   padding: 1rem;
   border: 1px solid var(--line);
   border-radius: var(--radius-md);
