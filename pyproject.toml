@@ -18,6 +18,10 @@ dependencies = [
   "youtube-transcript-api>=0.6.3",
 ]
 
+[project.urls]
+Repository = "https://github.com/HusamMTU/PodcastAnything-Local"
+Issues = "https://github.com/HusamMTU/PodcastAnything-Local/issues"
+
 [project.optional-dependencies]
 dev = [
   "httpx>=0.28.1",

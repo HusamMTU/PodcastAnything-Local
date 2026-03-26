@@ -38,6 +38,7 @@ audio during synthesis when the selected TTS path supports it.
 - [Configuration](#configuration)
 - [Development](#development)
 - [CI](#ci)
+- [Releases](#releases)
 - [Troubleshooting](#troubleshooting)
 
 ## Supported Features
@@ -398,6 +399,37 @@ Verified locally:
 - `./.venv/bin/python -m pytest tests/test_tts_elevenlabs.py`
 - `make test-elevenlabs-live`
 - `make test-elevenlabs-live DUO=1`
+
+## Releases
+
+This repo now includes a tag-driven release workflow in
+[`release.yml`](.github/workflows/release.yml).
+
+Recommended release flow:
+
+1. Update [CHANGELOG.md](CHANGELOG.md) and move any user-facing items out of
+   `Unreleased`.
+2. Bump the version in [pyproject.toml](pyproject.toml).
+3. Run the local release gate:
+   `make test-ci`
+4. Make sure the hosted smoke workflow is green if the release changes OpenAI
+   behavior.
+5. Commit the release prep on `main`.
+6. Create and push a tag such as `v0.2.0`:
+
+```bash
+git tag v0.2.0
+git push origin main --follow-tags
+```
+
+What happens next:
+
+- GitHub Actions builds the wheel and source distribution
+- the workflow creates a GitHub Release for the tag
+- built artifacts from `dist/` are attached to that release
+
+You can also trigger the release workflow manually for an existing tag from the
+Actions tab.
 
 ## Troubleshooting
 
