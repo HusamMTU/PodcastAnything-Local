@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 
 from podcast_anything_local.db.repository import JobRepository
+from podcast_anything_local.jobs.audio_streams import JobAudioStreamBroker, JobAudioStreamNotFoundError
 from podcast_anything_local.services.audio import AudioService
 from podcast_anything_local.services.document_pipeline import MultimodalDocumentService
 from podcast_anything_local.services.ingestion import IngestionService
@@ -22,6 +23,7 @@ class PipelineService:
         rewrite_service: RewriteService,
         document_service: MultimodalDocumentService,
         audio_service: AudioService,
+        audio_stream_broker: JobAudioStreamBroker,
     ) -> None:
         self._repository = repository
         self._artifact_store = artifact_store
@@ -29,6 +31,7 @@ class PipelineService:
         self._rewrite_service = rewrite_service
         self._document_service = document_service
         self._audio_service = audio_service
+        self._audio_stream_broker = audio_stream_broker
 
     def run_job(self, job_id: str) -> None:
         stage = "ingesting"
@@ -194,8 +197,23 @@ class PipelineService:
                 provider_name=job.tts_provider,
                 voice_id=job.voice_id,
                 voice_id_b=job.voice_id_b,
+                on_stream_start=lambda content_type, file_name: self._audio_stream_broker.open(
+                    job_id,
+                    content_type=content_type,
+                    file_name=file_name,
+                ),
+                on_stream_chunk=lambda chunk: self._audio_stream_broker.publish(job_id, chunk),
+                on_preview_segment=lambda segment, index: self._artifact_store.write_bytes(
+                    job_id,
+                    f"preview_audio_{index:03d}.{segment.file_name.split('.')[-1]}",
+                    segment.data,
+                ),
             )
             audio_path = self._artifact_store.write_bytes(job_id, audio.file_name, audio.data)
+            try:
+                self._audio_stream_broker.close(job_id)
+            except JobAudioStreamNotFoundError:
+                pass
             final_job = self._repository.record_artifact(
                 job_id,
                 audio_artifact=audio_path,
@@ -231,5 +249,9 @@ class PipelineService:
             )
             self._repository.mark_completed(job_id)
         except Exception as exc:
+            try:
+                self._audio_stream_broker.fail(job_id, str(exc))
+            except JobAudioStreamNotFoundError:
+                pass
             self._repository.mark_failed(job_id, str(exc), stage)
             raise

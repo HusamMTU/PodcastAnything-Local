@@ -177,6 +177,21 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "createScriptTurn" in js_response.text
         assert "shouldLoadArtifacts" in js_response.text
         assert '["rewriting", "synthesizing"].includes(job.current_stage || "")' in js_response.text
+        assert "shouldUseLiveAudioStream" in js_response.text
+        assert 'job.tts_provider === "elevenlabs"' in js_response.text
+        assert '(job.tts_provider === "openai" && job.script_mode === "single")' in js_response.text
+        assert 'elements.audioPlayer.src = `/jobs/${job.job_id}/audio-stream?v=${Date.now()}`;' in js_response.text
+        assert "pendingAudioArtifactUrl" in js_response.text
+        assert "shouldDeferAudioArtifactSwap" in js_response.text
+        assert "promotePendingAudioArtifact" in js_response.text
+        assert 'elements.audioPlayer.addEventListener("ended", handleAudioEnded);' in js_response.text
+        assert "shouldUsePreviewAudioSegments" in js_response.text
+        assert 'job.tts_provider === "openai" &&' in js_response.text
+        assert 'job.script_mode === "duo"' in js_response.text
+        assert "syncPreviewAudioSegments" in js_response.text
+        assert "playPreviewAudioSegment" in js_response.text
+        assert "advancePreviewAudioSegment" in js_response.text
+        assert 'const audio = artifacts.find((artifact) => /^audio\\.(wav|mp3|flac|aac|opus)$/i.test(artifact.name));' in js_response.text
         assert "jobTitleShell" in js_response.text
         assert "Generating title..." not in js_response.text
         assert "setPanelCollapsed" in js_response.text

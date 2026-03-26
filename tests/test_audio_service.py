@@ -16,6 +16,8 @@ class _CapturingProvider:
     def __init__(self) -> None:
         self.calls: list[tuple[str, str | None, str | None]] = []
         self.dialogue_calls: list[tuple[list[tuple[str, str]], str | None, str | None]] = []
+        self.stream_calls: list[tuple[str, str | None, str | None]] = []
+        self.stream_dialogue_calls: list[tuple[list[tuple[str, str]], str | None, str | None]] = []
 
     def synthesize(
         self,
@@ -44,6 +46,49 @@ class _CapturingProvider:
         self.dialogue_calls.append((turns, voice_id_a, voice_id_b))
         return SynthesizedAudio(
             data=b"ID3fake",
+            file_name="audio.mp3",
+            content_type="audio/mpeg",
+        )
+
+    def supports_live_streaming(self) -> bool:
+        return True
+
+    def live_stream_content_type(self) -> str:
+        return "audio/mpeg"
+
+    def live_stream_file_name(self) -> str:
+        return "audio.mp3"
+
+    def stream_synthesize(
+        self,
+        *,
+        text: str,
+        voice_id: str | None = None,
+        speaker: str | None = None,
+        on_chunk,
+    ) -> SynthesizedAudio:
+        self.stream_calls.append((text, voice_id, speaker))
+        on_chunk(b"chunk-a")
+        on_chunk(b"chunk-b")
+        return SynthesizedAudio(
+            data=b"chunk-achunk-b",
+            file_name="audio.mp3",
+            content_type="audio/mpeg",
+        )
+
+    def stream_synthesize_dialogue(
+        self,
+        *,
+        turns: list[tuple[str, str]],
+        voice_id_a: str | None,
+        voice_id_b: str | None,
+        on_chunk,
+    ) -> SynthesizedAudio:
+        self.stream_dialogue_calls.append((turns, voice_id_a, voice_id_b))
+        on_chunk(b"dialogue-a")
+        on_chunk(b"dialogue-b")
+        return SynthesizedAudio(
+            data=b"dialogue-adialogue-b",
             file_name="audio.mp3",
             content_type="audio/mpeg",
         )
@@ -176,6 +221,74 @@ HOST_B: Glad to be here.
     ]
 
 
+def test_audio_service_emits_preview_segments_for_openai_duo(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    provider = _CapturingProvider()
+    settings = replace(
+        _build_settings(tmp_path),
+        tts_provider="openai",
+        openai_tts_voice="marin",
+        openai_tts_voice_b="cedar",
+    )
+    service = AudioService(settings)
+    monkeypatch.setattr(service, "_build_provider", lambda provider_name: provider)
+    previews: list[tuple[bytes, int]] = []
+
+    audio = service.synthesize(
+        script_text="HOST_A: Welcome back.\nHOST_B: Glad to be here.",
+        script_mode="duo",
+        provider_name="openai",
+        voice_id=None,
+        voice_id_b=None,
+        on_preview_segment=lambda segment, index: previews.append((segment.data, index)),
+    )
+
+    assert provider.calls == [
+        ("Welcome back.", "marin", "host_a"),
+        ("Glad to be here.", "cedar", "host_b"),
+    ]
+    assert previews == [
+        (b"RIFFfakeWAVE", 1),
+        (b"RIFFfakeWAVE", 2),
+    ]
+    assert audio.file_name == "audio.wav"
+
+
+def test_audio_service_emits_openai_duo_preview_segments_before_join(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    class _PreviewAwareProvider(_CapturingProvider):
+        def __init__(self) -> None:
+            super().__init__()
+            self.preview_count = 0
+
+        def join(self, segments: list[SynthesizedAudio]) -> SynthesizedAudio:
+            assert self.preview_count == len(segments)
+            return segments[0]
+
+    provider = _PreviewAwareProvider()
+    settings = replace(
+        _build_settings(tmp_path),
+        tts_provider="openai",
+        openai_tts_voice="marin",
+        openai_tts_voice_b="cedar",
+    )
+    service = AudioService(settings)
+    monkeypatch.setattr(service, "_build_provider", lambda provider_name: provider)
+
+    service.synthesize(
+        script_text="HOST_A: Welcome back.\nHOST_B: Glad to be here.",
+        script_mode="duo",
+        provider_name="openai",
+        voice_id=None,
+        voice_id_b=None,
+        on_preview_segment=lambda segment, index: setattr(provider, "preview_count", index),
+    )
+
+
 def test_audio_service_uses_elevenlabs_voice_defaults(
     tmp_path: Path,
     monkeypatch,
@@ -213,4 +326,106 @@ HOST_B: Glad to be here.
             "voice-b",
         )
     ]
+    assert audio.file_name == "audio.mp3"
+
+
+def test_audio_service_streams_elevenlabs_single_when_callbacks_are_provided(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    provider = _CapturingProvider()
+    settings = replace(
+        _build_settings(tmp_path),
+        tts_provider="elevenlabs",
+        elevenlabs_voice_id="voice-a",
+    )
+    service = AudioService(settings)
+    monkeypatch.setattr(service, "_build_provider", lambda provider_name: provider)
+    started: list[tuple[str, str]] = []
+    chunks: list[bytes] = []
+
+    audio = service.synthesize(
+        script_text="Host: Welcome back.",
+        script_mode="single",
+        provider_name="elevenlabs",
+        voice_id=None,
+        voice_id_b=None,
+        on_stream_start=lambda content_type, file_name: started.append((content_type, file_name)),
+        on_stream_chunk=chunks.append,
+    )
+
+    assert provider.calls == []
+    assert provider.stream_calls == [("Welcome back.", "voice-a", "host_a")]
+    assert started == [("audio/mpeg", "audio.mp3")]
+    assert chunks == [b"chunk-a", b"chunk-b"]
+    assert audio.file_name == "audio.mp3"
+
+
+def test_audio_service_streams_openai_single_when_callbacks_are_provided(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    provider = _CapturingProvider()
+    settings = replace(
+        _build_settings(tmp_path),
+        tts_provider="openai",
+        openai_tts_voice="marin",
+    )
+    service = AudioService(settings)
+    monkeypatch.setattr(service, "_build_provider", lambda provider_name: provider)
+    started: list[tuple[str, str]] = []
+    chunks: list[bytes] = []
+
+    audio = service.synthesize(
+        script_text="Host: Welcome back.",
+        script_mode="single",
+        provider_name="openai",
+        voice_id=None,
+        voice_id_b=None,
+        on_stream_start=lambda content_type, file_name: started.append((content_type, file_name)),
+        on_stream_chunk=chunks.append,
+    )
+
+    assert provider.calls == []
+    assert provider.stream_calls == [("Welcome back.", "marin", "host_a")]
+    assert started == [("audio/mpeg", "audio.mp3")]
+    assert chunks == [b"chunk-a", b"chunk-b"]
+    assert audio.file_name == "audio.mp3"
+
+
+def test_audio_service_streams_elevenlabs_duo_when_callbacks_are_provided(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    provider = _CapturingProvider()
+    settings = replace(
+        _build_settings(tmp_path),
+        tts_provider="elevenlabs",
+        elevenlabs_voice_id="voice-a",
+        elevenlabs_voice_id_b="voice-b",
+    )
+    service = AudioService(settings)
+    monkeypatch.setattr(
+        "podcast_anything_local.services.audio.ElevenLabsTTSProvider",
+        lambda **kwargs: provider,
+    )
+    started: list[tuple[str, str]] = []
+    chunks: list[bytes] = []
+
+    audio = service.synthesize(
+        script_text="HOST_A: Welcome back.\nHOST_B: Glad to be here.",
+        script_mode="duo",
+        provider_name="elevenlabs",
+        voice_id=None,
+        voice_id_b=None,
+        on_stream_start=lambda content_type, file_name: started.append((content_type, file_name)),
+        on_stream_chunk=chunks.append,
+    )
+
+    assert provider.dialogue_calls == []
+    assert provider.stream_dialogue_calls == [
+        ([("HOST_A", "Welcome back."), ("HOST_B", "Glad to be here.")], "voice-a", "voice-b")
+    ]
+    assert started == [("audio/mpeg", "audio.mp3")]
+    assert chunks == [b"dialogue-a", b"dialogue-b"]
     assert audio.file_name == "audio.mp3"

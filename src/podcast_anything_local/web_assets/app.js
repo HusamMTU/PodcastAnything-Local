@@ -1,6 +1,12 @@
 const state = {
   config: null,
   currentJobId: null,
+  currentJob: null,
+  liveAudioJobId: null,
+  pendingAudioArtifactUrl: null,
+  previewSegmentUrls: [],
+  previewNextIndex: 0,
+  previewPlaybackWanted: false,
   pollTimer: null,
   sourceMode: "url",
   sourcesView: "new",
@@ -66,6 +72,9 @@ function bindEvents() {
   elements.sourcesExpand.addEventListener("click", () => setPanelCollapsed("sources", false));
   elements.studioCollapse.addEventListener("click", () => setPanelCollapsed("studio", true));
   elements.studioExpand.addEventListener("click", () => setPanelCollapsed("studio", false));
+  elements.audioPlayer.addEventListener("ended", handleAudioEnded);
+  elements.audioPlayer.addEventListener("play", onAudioPlay);
+  elements.audioPlayer.addEventListener("pause", onAudioPause);
 
   for (const button of elements.modeButtons) {
     button.addEventListener("click", () => setSourceMode(button.dataset.sourceMode || "url"));
@@ -204,6 +213,12 @@ async function activateJob(jobId) {
 
 async function activateJobWithSeed(jobId, seedJob) {
   state.currentJobId = jobId;
+  state.currentJob = null;
+  state.liveAudioJobId = null;
+  state.pendingAudioArtifactUrl = null;
+  state.previewSegmentUrls = [];
+  state.previewNextIndex = 0;
+  state.previewPlaybackWanted = false;
 
   const job = await loadJob(jobId, { includeArtifacts: true });
   if (job && job.status !== "completed" && job.status !== "failed") {
@@ -232,6 +247,7 @@ async function loadJob(jobId, options = {}) {
   try {
     const job = await fetchJson(`/jobs/${jobId}`);
     state.currentJobId = jobId;
+    state.currentJob = job;
     renderJob(job);
 
     if (shouldLoadArtifacts(job, { includeArtifacts })) {
@@ -285,6 +301,10 @@ function renderJob(job) {
     elements.jobError.textContent = "";
     elements.jobError.classList.add("is-hidden");
   }
+
+  if (shouldUseLiveAudioStream(job)) {
+    attachLiveAudioStream(job);
+  }
 }
 
 async function loadArtifacts(jobId) {
@@ -295,8 +315,9 @@ async function loadArtifacts(jobId) {
 
 function renderArtifactList(artifacts) {
   elements.artifactList.replaceChildren();
+  const visibleArtifacts = artifacts.filter((artifact) => !isPreviewAudioArtifact(artifact));
 
-  if (!artifacts.length) {
+  if (!visibleArtifacts.length) {
     const empty = document.createElement("li");
     empty.className = "hint";
     empty.textContent = "No artifacts available yet.";
@@ -304,7 +325,7 @@ function renderArtifactList(artifacts) {
     return;
   }
 
-  for (const artifact of artifacts) {
+  for (const artifact of visibleArtifacts) {
     const item = document.createElement("li");
     item.className = "artifact-item";
 
@@ -342,9 +363,19 @@ async function loadScriptArtifact(artifacts) {
 }
 
 async function loadAudioArtifact(artifacts) {
-  const audio = artifacts.find((artifact) => artifact.name.endsWith(".wav") || artifact.name.endsWith(".mp3"));
+  const audio = artifacts.find((artifact) => /^audio\.(wav|mp3|flac|aac|opus)$/i.test(artifact.name));
 
   if (!audio) {
+    if (shouldUseLiveAudioStream(state.currentJob)) {
+      attachLiveAudioStream(state.currentJob);
+      return;
+    }
+    if (shouldUsePreviewAudioSegments(state.currentJob)) {
+      syncPreviewAudioSegments(artifacts);
+      return;
+    }
+    state.liveAudioJobId = null;
+    resetPreviewAudioState();
     elements.audioPlayer.classList.add("is-hidden");
     elements.audioPlayer.removeAttribute("src");
     elements.audioDownload.classList.add("is-hidden");
@@ -353,10 +384,203 @@ async function loadAudioArtifact(artifacts) {
   }
 
   const cacheBust = Date.now();
-  elements.audioPlayer.src = `${audio.download_path}?v=${cacheBust}`;
-  elements.audioPlayer.classList.remove("is-hidden");
   elements.audioDownload.href = audio.download_path;
   elements.audioDownload.classList.remove("is-hidden");
+  const artifactUrl = `${audio.download_path}?v=${cacheBust}`;
+
+  if (shouldDeferAudioArtifactSwap(artifactUrl)) {
+    state.pendingAudioArtifactUrl = artifactUrl;
+    elements.audioPlayer.classList.remove("is-hidden");
+    return;
+  }
+
+  applySavedAudioArtifact(artifactUrl);
+}
+
+function shouldUseLiveAudioStream(job) {
+  return Boolean(
+    job &&
+      job.job_id &&
+      job.status === "running" &&
+      job.current_stage === "synthesizing" &&
+      (job.tts_provider === "elevenlabs" ||
+        (job.tts_provider === "openai" && job.script_mode === "single")),
+  );
+}
+
+function shouldUsePreviewAudioSegments(job) {
+  return Boolean(
+    job &&
+      job.job_id &&
+      job.status === "running" &&
+      job.current_stage === "synthesizing" &&
+      job.tts_provider === "openai" &&
+      job.script_mode === "duo",
+  );
+}
+
+function attachLiveAudioStream(job) {
+  if (!shouldUseLiveAudioStream(job)) {
+    return;
+  }
+  if (state.liveAudioJobId === job.job_id) {
+    return;
+  }
+
+  state.liveAudioJobId = job.job_id;
+  state.pendingAudioArtifactUrl = null;
+  resetPreviewAudioState();
+  elements.audioPlayer.src = `/jobs/${job.job_id}/audio-stream?v=${Date.now()}`;
+  elements.audioPlayer.classList.remove("is-hidden");
+  elements.audioDownload.classList.add("is-hidden");
+  elements.audioDownload.removeAttribute("href");
+}
+
+function shouldDeferAudioArtifactSwap(artifactUrl) {
+  return (
+    (Boolean(state.liveAudioJobId) || isPreviewAudioSource(elements.audioPlayer.currentSrc)) &&
+    !elements.audioPlayer.paused &&
+    !elements.audioPlayer.ended &&
+    !sameAudioSource(elements.audioPlayer.currentSrc, artifactUrl)
+  );
+}
+
+function handleAudioEnded() {
+  if (advancePreviewAudioSegment()) {
+    return;
+  }
+  promotePendingAudioArtifact();
+}
+
+function promotePendingAudioArtifact() {
+  if (!state.pendingAudioArtifactUrl) {
+    return;
+  }
+  applySavedAudioArtifact(state.pendingAudioArtifactUrl);
+}
+
+function applySavedAudioArtifact(artifactUrl) {
+  state.pendingAudioArtifactUrl = null;
+  state.liveAudioJobId = null;
+  resetPreviewAudioState();
+  if (!sameAudioSource(elements.audioPlayer.currentSrc, artifactUrl)) {
+    elements.audioPlayer.src = artifactUrl;
+  }
+  elements.audioPlayer.classList.remove("is-hidden");
+}
+
+function isLiveAudioSource(url) {
+  return normalizeAudioSource(url).includes("/audio-stream");
+}
+
+function isPreviewAudioSource(url) {
+  return normalizeAudioSource(url).includes("/preview_audio_");
+}
+
+function sameAudioSource(currentUrl, nextUrl) {
+  return normalizeAudioSource(currentUrl) === normalizeAudioSource(nextUrl);
+}
+
+function normalizeAudioSource(url) {
+  if (!url) {
+    return "";
+  }
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return `${parsed.pathname}${parsed.search.replace(/([?&])v=\d+/, "$1").replace(/[?&]$/, "")}`;
+  } catch (error) {
+    return url.replace(/([?&])v=\d+/, "$1").replace(/[?&]$/, "");
+  }
+}
+
+function isPreviewAudioArtifact(artifact) {
+  return /^preview_audio_\d+\.(wav|mp3)$/i.test(artifact.name);
+}
+
+function syncPreviewAudioSegments(artifacts) {
+  const previewUrls = artifacts
+    .filter((artifact) => isPreviewAudioArtifact(artifact))
+    .map((artifact) => artifact.download_path);
+
+  if (!previewUrls.length) {
+    return;
+  }
+
+  if (!samePreviewQueue(previewUrls)) {
+    state.previewSegmentUrls = previewUrls;
+  }
+
+  if (!isPreviewAudioSource(elements.audioPlayer.currentSrc)) {
+    playPreviewAudioSegment(0, false);
+    return;
+  }
+
+  if (
+    state.previewPlaybackWanted &&
+    state.previewNextIndex < state.previewSegmentUrls.length &&
+    (elements.audioPlayer.paused || elements.audioPlayer.ended)
+  ) {
+    playPreviewAudioSegment(state.previewNextIndex, true);
+  }
+}
+
+function samePreviewQueue(nextUrls) {
+  if (state.previewSegmentUrls.length !== nextUrls.length) {
+    return false;
+  }
+  return state.previewSegmentUrls.every((url, index) => url === nextUrls[index]);
+}
+
+function playPreviewAudioSegment(index, autoplay) {
+  if (index < 0 || index >= state.previewSegmentUrls.length) {
+    return false;
+  }
+
+  state.liveAudioJobId = null;
+  const previewUrl = `${state.previewSegmentUrls[index]}?v=${Date.now()}`;
+  state.previewNextIndex = index + 1;
+  if (!sameAudioSource(elements.audioPlayer.currentSrc, previewUrl)) {
+    elements.audioPlayer.src = previewUrl;
+  }
+  elements.audioPlayer.classList.remove("is-hidden");
+  elements.audioDownload.classList.add("is-hidden");
+  elements.audioDownload.removeAttribute("href");
+  if (autoplay) {
+    void elements.audioPlayer.play().catch(() => {});
+  }
+  return true;
+}
+
+function advancePreviewAudioSegment() {
+  if (!isPreviewAudioSource(elements.audioPlayer.currentSrc)) {
+    return false;
+  }
+
+  if (state.previewNextIndex < state.previewSegmentUrls.length) {
+    state.previewPlaybackWanted = true;
+    return playPreviewAudioSegment(state.previewNextIndex, true);
+  }
+
+  state.previewPlaybackWanted = true;
+  return false;
+}
+
+function onAudioPlay() {
+  if (isPreviewAudioSource(elements.audioPlayer.currentSrc)) {
+    state.previewPlaybackWanted = true;
+  }
+}
+
+function onAudioPause() {
+  if (isPreviewAudioSource(elements.audioPlayer.currentSrc) && !elements.audioPlayer.ended) {
+    state.previewPlaybackWanted = false;
+  }
+}
+
+function resetPreviewAudioState() {
+  state.previewSegmentUrls = [];
+  state.previewNextIndex = 0;
+  state.previewPlaybackWanted = false;
 }
 
 async function refreshJobs() {
