@@ -10,7 +10,10 @@ from podcast_anything_local.providers.rewrite.base import RewriteProvider, Rewri
 from podcast_anything_local.providers.rewrite.openai_compatible import (
     OpenAICompatibleRewriteProvider,
 )
-from podcast_anything_local.providers.rewrite.prompting import MAX_SPOKEN_WORDS, clean_generated_title
+from podcast_anything_local.providers.rewrite.prompting import (
+    clean_generated_title,
+    get_podcast_length_target,
+)
 
 _DUO_LABEL_RE = re.compile(r"^\s*(?P<label>[A-Za-z][A-Za-z0-9 _-]{0,40})\s*:\s*(?P<text>.*)$")
 _TIMESTAMP_RE = re.compile(r"\b\d{1,2}:\d{2}(?:\s*[–-]\s*\d{1,2}:\d{2})?\b")
@@ -94,6 +97,7 @@ class RewriteService:
         style: str,
         source_type: str | None,
         script_mode: str,
+        podcast_length: str,
     ) -> str:
         provider = self._build_provider()
         script = provider.rewrite(
@@ -102,13 +106,18 @@ class RewriteService:
             style=style,
             source_type=source_type,
             script_mode=script_mode,
+            podcast_length=podcast_length,
         )
         cleaned = script.strip()
         if not cleaned:
             raise RewriteProviderError("Rewrite provider returned an empty script.")
         if script_mode == "duo":
             cleaned = _normalize_duo_script(cleaned)
-        cleaned = _limit_script_to_target_duration(cleaned, script_mode=script_mode)
+        cleaned = _limit_script_to_target_duration(
+            cleaned,
+            script_mode=script_mode,
+            podcast_length=podcast_length,
+        )
         return cleaned
 
     def prepare_source_text(
@@ -308,14 +317,20 @@ def _find_truncation_point(text: str, max_chars: int) -> int:
     return cutoff
 
 
-def _limit_script_to_target_duration(script_text: str, *, script_mode: str) -> str:
-    if _count_script_words(script_text) <= MAX_SPOKEN_WORDS:
+def _limit_script_to_target_duration(
+    script_text: str,
+    *,
+    script_mode: str,
+    podcast_length: str,
+) -> str:
+    max_words = get_podcast_length_target(podcast_length).max_spoken_words
+    if _count_script_words(script_text) <= max_words:
         return script_text
 
     if script_mode.strip().lower() == "duo":
-        limited = _truncate_duo_script_to_word_budget(script_text, max_words=MAX_SPOKEN_WORDS)
+        limited = _truncate_duo_script_to_word_budget(script_text, max_words=max_words)
     else:
-        limited = _truncate_plain_text_to_word_budget(script_text, max_words=MAX_SPOKEN_WORDS)
+        limited = _truncate_plain_text_to_word_budget(script_text, max_words=max_words)
 
     return limited or script_text
 

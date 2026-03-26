@@ -36,6 +36,7 @@ const elements = {
   },
   scriptMode: document.getElementById("script-mode"),
   ttsProvider: document.getElementById("tts-provider"),
+  podcastLengthInput: document.getElementById("podcast-length"),
   formMessage: document.getElementById("form-message"),
   submitButton: document.getElementById("submit-button"),
   jobDetails: document.getElementById("job-details"),
@@ -53,6 +54,7 @@ const elements = {
   recentJobs: document.getElementById("recent-jobs"),
   retryButton: document.getElementById("retry-button"),
   modeButtons: Array.from(document.querySelectorAll("[data-source-mode]")),
+  podcastLengthButtons: Array.from(document.querySelectorAll("[data-podcast-length]")),
 };
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -79,8 +81,13 @@ function bindEvents() {
     button.addEventListener("click", () => setSourcesView(button.dataset.sourcesView || "new"));
   }
 
+  for (const button of elements.podcastLengthButtons) {
+    button.addEventListener("click", () => setPodcastLength(button.dataset.podcastLength || "medium"));
+  }
+
   setSourceMode(state.sourceMode);
   setSourcesView(state.sourcesView);
+  setPodcastLength(elements.podcastLengthInput.value || "medium");
   applyPanelState();
 }
 
@@ -94,6 +101,7 @@ async function loadConfig() {
     const payload = await fetchJson("/config");
     state.config = payload;
     fillSelect(elements.ttsProvider, payload.supported_tts_providers);
+    setPodcastLength(payload.default_podcast_length || elements.podcastLengthInput.value || "medium");
   } catch (error) {}
 }
 
@@ -145,6 +153,19 @@ function setSourcesView(view) {
   }
 }
 
+function setPodcastLength(podcastLength) {
+  const supported = ["short", "medium", "long"];
+  const fallback = state.config?.default_podcast_length || "medium";
+  const nextValue = supported.includes(podcastLength) ? podcastLength : fallback;
+  elements.podcastLengthInput.value = nextValue;
+
+  for (const button of elements.podcastLengthButtons) {
+    const isActive = button.dataset.podcastLength === nextValue;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", isActive ? "true" : "false");
+  }
+}
+
 async function onSubmitJob(event) {
   event.preventDefault();
   clearMessage();
@@ -186,6 +207,7 @@ function buildSubmissionPayload() {
   }
 
   appendIfValue(formData, "script_mode", elements.scriptMode.value);
+  appendIfValue(formData, "podcast_length", elements.podcastLengthInput.value);
   appendIfValue(formData, "tts_provider", elements.ttsProvider.value);
 
   return formData;
@@ -285,6 +307,7 @@ function shouldLoadArtifacts(job, options = {}) {
 
 function renderJob(job) {
   elements.scriptMode.value = job.script_mode || "duo";
+  setPodcastLength(job.podcast_length || state.config?.default_podcast_length || "medium");
   elements.ttsProvider.value = job.tts_provider || state.config?.default_tts_provider || "openai";
   if (job.title) {
     elements.jobTitleValue.textContent = job.title;

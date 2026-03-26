@@ -18,6 +18,7 @@ class _FakeDocumentProvider:
         self.chunk_calls: list[tuple[int, int, int, str | None]] = []
         self.map_calls: int = 0
         self.plan_calls: int = 0
+        self.plan_lengths: list[str] = []
 
     def summarize_pdf_chunk(
         self,
@@ -67,8 +68,10 @@ class _FakeDocumentProvider:
         document_map: dict[str, object],
         title: str | None,
         script_mode: str,
+        podcast_length: str = "medium",
     ) -> dict[str, object]:
         self.plan_calls += 1
+        self.plan_lengths.append(podcast_length)
         return {
             "working_title": "Quantum Document Brief",
             "audience": "General technical audience",
@@ -173,6 +176,7 @@ def test_multimodal_document_service_builds_chunks_and_plan(tmp_path: Path) -> N
         document_map=analysis.document_map,
         title="Quantum Notes",
         script_mode="single",
+        podcast_length="long",
     )
     rewrite_source = service.build_rewrite_source_text(
         analysis=analysis,
@@ -185,6 +189,7 @@ def test_multimodal_document_service_builds_chunks_and_plan(tmp_path: Path) -> N
     )
 
     assert fake_provider.plan_calls == 1
+    assert fake_provider.plan_lengths == ["long"]
     assert "Quantum Document Brief" in rewrite_source
     assert "Chunk evidence:" in rewrite_source
     assert "page_index.json" in artifacts

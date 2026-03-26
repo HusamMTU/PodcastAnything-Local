@@ -42,11 +42,18 @@ def test_root_serves_built_in_ui(tmp_path: Path) -> None:
         assert ">Episode</h2>" in response.text
         assert ">Studio</h2>" in response.text
         assert "Audio generator" in response.text
+        assert "Episode length" in response.text
         assert response.text.index('<option value="duo" selected>Two hosts</option>') < response.text.index(
             '<option value="single">Single host</option>'
         )
         assert '<option value="duo" selected>Two hosts</option>' in response.text
         assert '<select id="tts-provider" name="tts_provider" form="job-form"></select>' in response.text
+        assert 'id="podcast-length"' in response.text
+        assert 'name="podcast_length"' in response.text
+        assert 'data-podcast-length="short"' in response.text
+        assert 'data-podcast-length="medium"' in response.text
+        assert 'data-podcast-length="long"' in response.text
+        assert 'class="length-button is-active"' in response.text
         assert "Use default" not in response.text
         assert 'class="panel-view-switch"' in response.text
         assert 'data-sources-view="new"' in response.text
@@ -122,10 +129,12 @@ def test_config_exposes_current_defaults(tmp_path: Path) -> None:
         assert payload["default_web_extractor"] == "auto"
         assert payload["script_writer"] == "openai"
         assert payload["default_tts_provider"] == "openai"
+        assert payload["default_podcast_length"] == "medium"
         assert "auto" in payload["supported_web_extractors"]
         assert "bs4" in payload["supported_web_extractors"]
         assert "openai" in payload["supported_tts_providers"]
         assert "wave" not in payload["supported_tts_providers"]
+        assert payload["supported_podcast_lengths"] == ["short", "medium", "long"]
 
 
 def test_ui_assets_are_served(tmp_path: Path) -> None:
@@ -151,6 +160,11 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert "justify-content: flex-start;" in css_response.text
         assert ".panel-view-switch" in css_response.text
         assert ".panel-view-button" in css_response.text
+        assert ".length-switch" in css_response.text
+        assert ".length-button" in css_response.text
+        assert ".length-button.is-active" in css_response.text
+        assert ".length-label" in css_response.text
+        assert ".length-range" in css_response.text
         assert ".episode-top" in css_response.text
         assert "--panel-height: min(86vh, 64rem);" in css_response.text
         assert "max-height: var(--panel-height);" in css_response.text
@@ -183,9 +197,11 @@ def test_ui_assets_are_served(tmp_path: Path) -> None:
         assert 'source_text' in js_response.text
         assert "syncSelectedSettingsSummary" not in js_response.text
         assert "setSourcesView" in js_response.text
+        assert "setPodcastLength" in js_response.text
         assert 'const preferredValue = (values || []).includes("openai") ? "openai" : values?.[0] || "";' in js_response.text
         assert 'if (state.sourcesView === "history") {' in js_response.text
         assert "void refreshJobs();" in js_response.text
+        assert 'appendIfValue(formData, "podcast_length", elements.podcastLengthInput.value);' in js_response.text
         assert "renderScriptPreview" in js_response.text
         assert "updateArtifactHint" in js_response.text
         assert "hasArtifactContext" in js_response.text

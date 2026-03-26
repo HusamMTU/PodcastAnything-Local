@@ -40,8 +40,16 @@ class JobRepository:
             }
             if not columns:
                 self._create_jobs_table(connection)
-            elif "rewrite_provider" in columns:
+                columns = {
+                    row["name"] for row in connection.execute("PRAGMA table_info(jobs)").fetchall()
+                }
+            if "rewrite_provider" in columns:
                 self._migrate_drop_rewrite_provider(connection)
+                columns = {
+                    row["name"] for row in connection.execute("PRAGMA table_info(jobs)").fetchall()
+                }
+            if "podcast_length" not in columns:
+                self._migrate_add_podcast_length(connection)
 
     def create_job(self, payload: CreateJobInput) -> JobRecord:
         job_id = payload.job_id or generate_job_id()
@@ -52,11 +60,11 @@ class JobRepository:
                 """
                 INSERT INTO jobs (
                     job_id, status, current_stage, source_kind, source_url,
-                    source_file_name, source_file_path, title, style, script_mode,
+                    source_file_name, source_file_path, title, style, script_mode, podcast_length,
                     tts_provider, voice_id, voice_id_b,
                     source_artifact, script_artifact, audio_artifact, error,
                     metadata_json, created_at, updated_at, started_at, completed_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     job_id,
@@ -69,6 +77,7 @@ class JobRepository:
                     payload.title,
                     payload.style,
                     payload.script_mode,
+                    payload.podcast_length,
                     payload.tts_provider,
                     payload.voice_id,
                     payload.voice_id_b,
@@ -251,6 +260,7 @@ class JobRepository:
                 title TEXT,
                 style TEXT NOT NULL,
                 script_mode TEXT NOT NULL,
+                podcast_length TEXT NOT NULL DEFAULT 'medium',
                 tts_provider TEXT NOT NULL,
                 voice_id TEXT,
                 voice_id_b TEXT,
@@ -290,6 +300,11 @@ class JobRepository:
         )
         connection.execute("DROP TABLE jobs_legacy_rewrite_provider")
 
+    def _migrate_add_podcast_length(self, connection: sqlite3.Connection) -> None:
+        connection.execute(
+            "ALTER TABLE jobs ADD COLUMN podcast_length TEXT NOT NULL DEFAULT 'medium'"
+        )
+
     def _update_fields(self, job_id: str, updates: dict[str, object | None]) -> None:
         if not updates:
             return
@@ -316,6 +331,7 @@ class JobRepository:
             title=row["title"],
             style=row["style"],
             script_mode=row["script_mode"],
+            podcast_length=row["podcast_length"],
             tts_provider=row["tts_provider"],
             voice_id=row["voice_id"],
             voice_id_b=row["voice_id_b"],

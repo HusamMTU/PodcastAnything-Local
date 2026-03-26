@@ -54,6 +54,7 @@ class Settings:
     tts_provider: str
     elevenlabs_api_key: str | None
     elevenlabs_model_id: str
+    podcast_length_default: str = "medium"
     elevenlabs_dialogue_model_id: str = "eleven_v3"
     elevenlabs_output_format: str = "mp3_44100_128"
     openai_tts_model: str = "gpt-4o-mini-tts"
@@ -82,6 +83,10 @@ def load_settings() -> Settings:
     if tts_provider not in {"wave", "elevenlabs", "openai"}:
         raise ConfigError("TTS_PROVIDER must be one of: wave, elevenlabs, openai")
 
+    podcast_length_default = _read_env("PODCAST_LENGTH_DEFAULT", "medium").lower()
+    if podcast_length_default not in {"short", "medium", "long"}:
+        raise ConfigError("PODCAST_LENGTH_DEFAULT must be one of: short, medium, long")
+
     web_extractor = _read_env("WEB_EXTRACTOR", "auto").lower()
     if web_extractor not in {"auto", "trafilatura", "bs4"}:
         raise ConfigError("WEB_EXTRACTOR must be one of: auto, trafilatura, bs4")
@@ -104,6 +109,7 @@ def load_settings() -> Settings:
         openai_api_key=_optional_env("OPENAI_API_KEY"),
         openai_model=_read_env("OPENAI_MODEL", "gpt-4o-mini"),
         tts_provider=tts_provider,
+        podcast_length_default=podcast_length_default,
         elevenlabs_api_key=_optional_env("ELEVENLABS_API_KEY"),
         elevenlabs_model_id=_read_env("ELEVENLABS_MODEL_ID", "eleven_multilingual_v2"),
         elevenlabs_dialogue_model_id=_read_env("ELEVENLABS_DIALOGUE_MODEL_ID", "eleven_v3"),

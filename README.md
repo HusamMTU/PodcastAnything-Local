@@ -51,7 +51,8 @@ audio during synthesis when the selected TTS path supports it.
 | PDF upload | Yes | Uses the multimodal document pipeline |
 | DOCX upload | Yes | Extracts text, then normalizes into `normalized.pdf` |
 | PPTX upload | Yes | Extracts slide text and notes, then normalizes into `normalized.pdf` |
-| Podcast modes | `single`, `duo` | Targets about 2-4 minutes of audio |
+| Podcast modes | `single`, `duo` | Single-host or two-host script structure |
+| Episode length presets | `short`, `medium`, `long` | `short`: 2-3 min, `medium`: 4-5 min, `long`: 6-10 min |
 | Script writer | OpenAI | Current built-in rewrite provider |
 | Voice generators | OpenAI, ElevenLabs | OpenAI is the default option; ElevenLabs is the higher-quality alternate |
 | Live audio preview | Yes | ElevenLabs `single` and `duo` stream live; OpenAI `single` streams live; OpenAI `duo` plays progressive preview segments |
@@ -184,6 +185,7 @@ Useful local URLs:
 From the UI:
 
 - choose `URL`, `Text`, or `Upload`
+- choose `Short`, `Medium`, or `Long` episode length in `Studio`
 - submit a source
 - monitor progress
 - preview the script
@@ -223,6 +225,7 @@ Direct module usage also works:
 ./.venv/bin/python -m podcast_anything_local.cli \
   --source-file ./brief.txt \
   --script-mode single \
+  --podcast-length medium \
   --output-dir ./downloads
 ```
 
@@ -230,6 +233,7 @@ Useful CLI flags:
 
 - `--script-mode single`
 - `--script-mode duo`
+- `--podcast-length short|medium|long`
 - `--voice-id <speaker_id>`
 - `--voice-id-b <speaker_id>`
 - `--output-dir ./downloads`
@@ -259,7 +263,8 @@ curl -X POST http://127.0.0.1:8000/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "source_url": "https://example.com/article",
-    "script_mode": "single"
+    "script_mode": "single",
+    "podcast_length": "medium"
   }'
 ```
 
@@ -268,7 +273,8 @@ Create a job from a file upload:
 ```bash
 curl -X POST http://127.0.0.1:8000/jobs \
   -F source_file=@./brief.txt \
-  -F script_mode=single
+  -F script_mode=single \
+  -F podcast_length=medium
 ```
 
 List a job's artifacts:
@@ -294,6 +300,7 @@ WEB_EXTRACTOR=auto
 OPENAI_BASE_URL=https://api.openai.com/v1
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-4o-mini
+PODCAST_LENGTH_DEFAULT=medium
 
 TTS_PROVIDER=openai
 OPENAI_TTS_MODEL=gpt-4o-mini-tts
@@ -314,6 +321,7 @@ Important settings:
 - `WEB_EXTRACTOR`
 - `OPENAI_API_KEY`
 - `OPENAI_MODEL`
+- `PODCAST_LENGTH_DEFAULT`
 - `TTS_PROVIDER`
 - `OPENAI_TTS_MODEL`
 - `OPENAI_TTS_VOICE`
@@ -324,6 +332,7 @@ Notes:
 - `WEB_EXTRACTOR=auto` tries `trafilatura` first and falls back to `bs4`
 - `WEB_EXTRACTOR=trafilatura` forces `trafilatura`
 - `WEB_EXTRACTOR=bs4` forces the simpler BeautifulSoup extractor
+- `PODCAST_LENGTH_DEFAULT` sets the default UI/API length preset for new jobs
 - for long PDFs with figures, layout, and page visuals, `gpt-4.1` is usually a
   stronger choice than `gpt-4o-mini`
 - if you want hosted TTS with the same vendor as script writing, set

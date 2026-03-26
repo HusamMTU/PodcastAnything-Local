@@ -4,7 +4,10 @@ from pathlib import Path
 
 from podcast_anything_local.core.config import Settings
 from podcast_anything_local.providers.rewrite.base import RewriteProviderError
-from podcast_anything_local.providers.rewrite.prompting import MAX_SPOKEN_WORDS
+from podcast_anything_local.providers.rewrite.prompting import (
+    MAX_SPOKEN_WORDS,
+    get_podcast_length_target,
+)
 from podcast_anything_local.services.rewrite import RewriteService
 
 
@@ -21,6 +24,7 @@ class _FakeProvider:
         style: str = "podcast",
         source_type: str | None = None,
         script_mode: str = "single",
+        podcast_length: str = "medium",
     ) -> str:
         return self._response
 
@@ -75,6 +79,7 @@ Co-host: Let's get into it.
         style="podcast",
         source_type="text",
         script_mode="duo",
+        podcast_length="medium",
     )
 
     assert result == (
@@ -107,6 +112,7 @@ Bob: Let's start with the photoelectric effect.
         style="podcast",
         source_type="text",
         script_mode="duo",
+        podcast_length="medium",
     )
 
     assert result == (
@@ -132,6 +138,7 @@ def test_rewrite_service_errors_early_for_unparseable_duo_output(tmp_path: Path,
             style="podcast",
             source_type="text",
             script_mode="duo",
+            podcast_length="medium",
         )
     except RewriteProviderError as exc:
         assert "recognizable speaker turns" in str(exc)
@@ -167,6 +174,7 @@ HOST_B: Great, now here is a detailed outline.
             style="podcast",
             source_type="text",
             script_mode="duo",
+            podcast_length="medium",
         )
     except RewriteProviderError as exc:
         assert "enough distinct speaker turns" in str(exc)
@@ -245,6 +253,7 @@ def test_rewrite_service_truncates_long_single_script_to_target_duration(
         style="podcast",
         source_type="text",
         script_mode="single",
+        podcast_length="medium",
     )
 
     assert len(result.split()) <= MAX_SPOKEN_WORDS + 5
@@ -277,6 +286,7 @@ def test_rewrite_service_truncates_long_duo_script_to_target_duration(
         style="podcast",
         source_type="text",
         script_mode="duo",
+        podcast_length="medium",
     )
 
     spoken_words = [
@@ -286,6 +296,44 @@ def test_rewrite_service_truncates_long_duo_script_to_target_duration(
     ]
     assert len(spoken_words) <= MAX_SPOKEN_WORDS + 5
     assert result.startswith("HOST_A:")
+
+
+def test_rewrite_service_uses_podcast_length_preset_for_word_budget(
+    tmp_path: Path, monkeypatch
+) -> None:
+    service = RewriteService(_build_settings(tmp_path))
+    long_sentence = (
+        "Quantum mechanics changed physics by showing that microscopic systems follow "
+        "probabilistic rules rather than classical certainty and by reshaping modern "
+        "electronics, chemistry, and computing. "
+    )
+    long_script = "\n\n".join(long_sentence * 10 for _ in range(20))
+    monkeypatch.setattr(
+        service,
+        "_build_provider",
+        lambda: _FakeProvider(long_script),
+    )
+
+    short_result = service.rewrite(
+        source_text="Source text",
+        title="Title",
+        style="podcast",
+        source_type="text",
+        script_mode="single",
+        podcast_length="short",
+    )
+    long_result = service.rewrite(
+        source_text="Source text",
+        title="Title",
+        style="podcast",
+        source_type="text",
+        script_mode="single",
+        podcast_length="long",
+    )
+
+    assert len(short_result.split()) <= get_podcast_length_target("short").max_spoken_words + 5
+    assert len(long_result.split()) <= get_podcast_length_target("long").max_spoken_words + 5
+    assert len(long_result.split()) > len(short_result.split())
 
 
 def test_rewrite_service_generates_clean_title_from_provider(tmp_path: Path, monkeypatch) -> None:

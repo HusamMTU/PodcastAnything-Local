@@ -36,6 +36,7 @@ class OpenAICompatibleRewriteProvider:
         style: str = "podcast",
         source_type: str | None = None,
         script_mode: str = "single",
+        podcast_length: str = "medium",
     ) -> str:
         prompt = build_podcast_prompt(
             source_text,
@@ -43,6 +44,7 @@ class OpenAICompatibleRewriteProvider:
             style=style,
             source_type=source_type,
             script_mode=script_mode,
+            podcast_length=podcast_length,
         )
         return self._complete(
             prompt=prompt,
@@ -123,11 +125,13 @@ class OpenAICompatibleRewriteProvider:
         document_map: dict[str, object],
         title: str | None,
         script_mode: str,
+        podcast_length: str = "medium",
     ) -> dict[str, object]:
         prompt = build_podcast_plan_prompt(
             document_map=document_map,
             title=title,
             script_mode=script_mode,
+            podcast_length=podcast_length,
         )
         return self._complete_json_response(
             prompt=prompt,

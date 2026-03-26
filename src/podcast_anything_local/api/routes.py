@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from podcast_anything_local.db.models import CreateJobInput
 from podcast_anything_local.db.repository import JobNotFoundError, generate_job_id
 from podcast_anything_local.jobs.audio_streams import JobAudioStreamNotFoundError
+from podcast_anything_local.providers.rewrite.prompting import SUPPORTED_PODCAST_LENGTHS
 from podcast_anything_local.schemas.config import AppConfigResponse
 from podcast_anything_local.schemas.jobs import ArtifactResponse, CreateJobRequest, JobResponse
 from podcast_anything_local.storage.artifacts import ArtifactNotFoundError
@@ -32,9 +33,11 @@ def app_config(request: Request) -> AppConfigResponse:
         default_web_extractor=settings.web_extractor,
         script_writer="openai",
         default_tts_provider=settings.tts_provider,
+        default_podcast_length=settings.podcast_length_default,
         default_style=settings.rewrite_style,
         supported_web_extractors=["auto", "trafilatura", "bs4"],
         supported_tts_providers=["openai", "elevenlabs"],
+        supported_podcast_lengths=list(SUPPORTED_PODCAST_LENGTHS),
     )
 
 
@@ -46,7 +49,10 @@ async def create_job(request: Request) -> JobResponse:
     settings = request.app.state.settings
 
     try:
-        payload = await _parse_create_request(request)
+        payload = await _parse_create_request(
+            request,
+            default_podcast_length=settings.podcast_length_default,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -81,6 +87,7 @@ async def create_job(request: Request) -> JobResponse:
             title=payload["title"],
             style=payload["style"] or settings.rewrite_style,
             script_mode=payload["script_mode"],
+            podcast_length=payload["podcast_length"],
             tts_provider=payload["tts_provider"] or settings.tts_provider,
             voice_id=payload["voice_id"],
             voice_id_b=payload["voice_id_b"],
@@ -201,10 +208,17 @@ def retry_job(job_id: str, request: Request) -> JobResponse:
     return JobResponse.from_record(record)
 
 
-async def _parse_create_request(request: Request) -> dict[str, Any]:
+async def _parse_create_request(
+    request: Request,
+    *,
+    default_podcast_length: str,
+) -> dict[str, Any]:
     content_type = request.headers.get("content-type", "")
     if "application/json" in content_type:
-        payload = CreateJobRequest.model_validate(await request.json())
+        raw_payload = await request.json()
+        if "podcast_length" not in raw_payload:
+            raw_payload["podcast_length"] = default_podcast_length
+        payload = CreateJobRequest.model_validate(raw_payload)
         return _normalize_inputs(
             source_url=payload.source_url,
             source_text=payload.source_text,
@@ -212,6 +226,7 @@ async def _parse_create_request(request: Request) -> dict[str, Any]:
             title=payload.title,
             style=payload.style,
             script_mode=payload.script_mode,
+            podcast_length=payload.podcast_length,
             tts_provider=payload.tts_provider,
             voice_id=payload.voice_id,
             voice_id_b=payload.voice_id_b,
@@ -228,6 +243,7 @@ async def _parse_create_request(request: Request) -> dict[str, Any]:
             title=_optional_form_value(form.get("title")),
             style=_optional_form_value(form.get("style")) or "podcast",
             script_mode=_optional_form_value(form.get("script_mode")) or "single",
+            podcast_length=_optional_form_value(form.get("podcast_length")) or default_podcast_length,
             tts_provider=_optional_form_value(form.get("tts_provider")),
             voice_id=_optional_form_value(form.get("voice_id")),
             voice_id_b=_optional_form_value(form.get("voice_id_b")),
@@ -244,6 +260,7 @@ def _normalize_inputs(
     title: str | None,
     style: str,
     script_mode: str,
+    podcast_length: str,
     tts_provider: str | None,
     voice_id: str | None,
     voice_id_b: str | None,
@@ -253,6 +270,9 @@ def _normalize_inputs(
         raise ValueError("Provide exactly one of source_url, source_text, or source_file.")
     if script_mode not in {"single", "duo"}:
         raise ValueError("script_mode must be one of: single, duo")
+    if podcast_length not in set(SUPPORTED_PODCAST_LENGTHS):
+        supported = ", ".join(SUPPORTED_PODCAST_LENGTHS)
+        raise ValueError(f"podcast_length must be one of: {supported}")
     return {
         "source_kind": "url" if source_url else ("text" if source_text else "file"),
         "source_url": source_url,
@@ -262,6 +282,7 @@ def _normalize_inputs(
         "title": title,
         "style": style.strip() if style else "podcast",
         "script_mode": script_mode,
+        "podcast_length": podcast_length,
         "tts_provider": tts_provider.strip().lower() if tts_provider else None,
         "voice_id": voice_id,
         "voice_id_b": voice_id_b,

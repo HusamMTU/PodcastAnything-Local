@@ -16,6 +16,7 @@ class CreateJobRequest(BaseModel):
     title: str | None = None
     style: str = "podcast"
     script_mode: Literal["single", "duo"] = "single"
+    podcast_length: Literal["short", "medium", "long"] = "medium"
     tts_provider: str | None = None
     voice_id: str | None = None
     voice_id_b: str | None = None
@@ -49,6 +50,7 @@ class JobResponse(BaseModel):
     title: str | None
     style: str
     script_mode: str
+    podcast_length: str
     tts_provider: str
     voice_id: str | None
     voice_id_b: str | None
@@ -74,6 +76,7 @@ class JobResponse(BaseModel):
             title=record.title,
             style=record.style,
             script_mode=record.script_mode,
+            podcast_length=record.podcast_length,
             tts_provider=record.tts_provider,
             voice_id=record.voice_id,
             voice_id_b=record.voice_id_b,
